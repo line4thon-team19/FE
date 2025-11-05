@@ -1,8 +1,7 @@
 import React from 'react'
-import ResultRow from '../components/ResultRow'
+import ResultCard from '../components/ResultCard'
 import LionComment from '../components/LionComment'
-import lion_icon from '../assets/images/lion.svg'
-import sad_lion_icon from '../assets/images/sad_lion.svg'
+import { Link } from 'react-router-dom'
 
 const Result = () => {
   return (
@@ -15,19 +14,17 @@ const Result = () => {
         <LionComment/>
       </div>
       <main>
-        <ResultRow/>
-        <ResultRow/>
-        <ResultRow/>
-        <ResultRow/>
-        <ResultRow/>
+        <ResultCard/>
       </main>
       <div className="btn">
         <button className="pratice">
           연습하러 가기
         </button>
-        <button className="home">
-          홈으로 돌아가기
-        </button>
+        <Link to='/'>
+          <button className="home">
+            홈으로 돌아가기
+          </button>
+        </Link>
       </div>
     </div>
   )
