@@ -1,8 +1,8 @@
 import React from 'react'
-import ResultRow from './components/ResultRow'
-import LionComment from './components/LionComment'
-import lion_icon from './assets/images/lion.svg'
-import sad_lion_icon from './assets/images/sad_lion.svg'
+import ResultRow from '../components/ResultRow'
+import LionComment from '../components/LionComment'
+import lion_icon from '../assets/images/lion.svg'
+import sad_lion_icon from '../assets/images/sad_lion.svg'
 
 const Result = () => {
   return (

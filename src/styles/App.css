@@ -187,6 +187,10 @@
             font-size: 35px;
             font-family: Paperozi;
         }
+
+        button:hover{
+            background-color: #FD7811;
+        }
     }
 }
 

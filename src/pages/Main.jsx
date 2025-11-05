@@ -1,6 +1,5 @@
 import React from 'react'
-import lion_icon from './assets/images/lion.svg'
-
+import lion_icon from '../assets/images/lion.svg'
 const App = () => {
   return (
     <div id="Main_wrap">
