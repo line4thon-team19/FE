@@ -3,7 +3,8 @@
  */
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://hyunseoko.store/api';
-const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true' || false;
+// 기본값을 mock으로 설정 (개발 환경에서는 mock 사용)
+const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false';
 
 /**
  * API 요청 함수

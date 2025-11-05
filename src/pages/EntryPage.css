@@ -1,0 +1,74 @@
+.entry-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.entry-page__container {
+  text-align: center;
+  padding: 2rem;
+  background: white;
+  border-radius: 16px;
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.entry-page__loading {
+  font-size: 1.2rem;
+  color: #333;
+  padding: 2rem;
+}
+
+.entry-page__error {
+  font-size: 1.1rem;
+  color: #e74c3c;
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+}
+
+.entry-page__title {
+  font-size: 2rem;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 1.5rem;
+}
+
+.entry-page__room-code {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #667eea;
+  margin-bottom: 1rem;
+}
+
+.entry-page__waiting {
+  font-size: 1rem;
+  color: #666;
+  margin-bottom: 1.5rem;
+}
+
+.entry-page__players {
+  font-size: 1rem;
+  color: #333;
+  margin-top: 1rem;
+}
+
+.entry-page__back-button {
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  background: #667eea;
+  color: white;
+  transition: background 0.3s ease;
+  margin-top: 1rem;
+}
+
+.entry-page__back-button:hover {
+  background: #5568d3;
+}
+
