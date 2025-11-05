@@ -2,6 +2,8 @@ import React from 'react'
 import ResultCard from '../components/ResultCard'
 import LionComment from '../components/LionComment'
 import { Link } from 'react-router-dom'
+import right_icon from '../assets/images/right.svg'
+import left_icon from '../assets/images/left.svg'
 
 const Result = () => {
   return (
@@ -14,7 +16,13 @@ const Result = () => {
         <LionComment/>
       </div>
       <main>
+        <button className="left">
+          <img src={left_icon} alt="" />
+        </button>
         <ResultCard/>
+        <button className="right">
+          <img src={right_icon} alt="" />
+        </button>
       </main>
       <div className="btn">
         <button className="pratice">
