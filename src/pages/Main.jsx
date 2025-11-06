@@ -3,32 +3,58 @@ import axios from 'axios';
 import lion_icon from '../assets/images/lion.svg'
 import { useState, useEffect } from 'react';
 
-const API_URL= 'https://hyunseoko.store/api/health';
+const HEALTH_API_URL= 'https://hyunseoko.store/api/health';
+const GUEST_API_URL = 'https://hyunseoko.store/api/guest';
 
 const App = () => {
-  const[loading, setLoading]=useState(false);
-  const[data, setDate]=useState(null);
-  const[error,setError]=useState(null);
+  // GET api 관련 상태
+  const [healthLoading, setHealthLoading] = useState(false); 
+  const [healthData, setHealthData] = useState(null); 
+  const [healthError, setHealthError] = useState(null); 
 
-  const fetchHealth=async()=>{
-    setLoading(true);
-    setError(null);
-    try{
-      const response = await axios.get(API_URL);
-      setDate(response.data);
-      console.log(response.data);
-    }catch (err){
-      const errorMessage = `API 연결 실패: ${err.message}. 콘솔을 확인해주세요.`;
-      setError(errorMessage);
+  //POSt  api 관련 상태
+  const [guestLoading, setGuestLoading] = useState(false);
+  const [guestData, setGuestData] = useState(null); 
+  const [guestError, setGuestError] = useState(null); 
+
+  // Health API 호출 함수
+  const fetchHealth = async () => {
+    setHealthLoading(true);
+    setHealthError(null);
+    try {
+      const response = await axios.get(HEALTH_API_URL);
+      setHealthData(response.data);
+      console.log("Health Check Success (GET):", response.data);
+    } catch (err) {
+      const errorMessage = `API Health Check (GET) 실패: ${err.message}`;
+      setHealthError(errorMessage);
       console.error("API Health Check Error:", err);
+    } finally {
+      setHealthLoading(false);
+    }
+  }
+
+  //POST 게스트 토큰 발급 함수
+  const registerGuest = async () => {
+    setGuestLoading(true);
+    setGuestError(null);
+    try {
+      const response = await axios.post(GUEST_API_URL, {});
+      setGuestData(response.data);
+      console.log("Guest Registration Success (POST):", response.data);
+    }catch (err){
+      const errorMessage = `API Guest Registration (POST) 실패: ${err.message}`;
+      setGuestError(errorMessage);  
+      console.error("API Guest Registration Error:", err);
     }finally{
-      setLoading(false);
+      setGuestLoading(false);
     }
   }
 
   
   useEffect(() => {
     fetchHealth();
+    registerGuest();
   }, []);
 
   
