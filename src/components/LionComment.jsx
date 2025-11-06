@@ -1,16 +1,16 @@
 import React from 'react'
-import lion from '../assets/images/lion.svg'
+import lion_icon from '../assets/images/lion.svg'
 import sad_lion_icon from '../assets/images/sad_lion.svg'
 
-const LionComment = () => {
+const LionComment = ({message, gameState}) => {
+  const lionIcon = (gameState === 'lose') ? sad_lion_icon : ion_icon;
   return (
     <div id="LionComponent_wrap">
         <div className="lion_icon">
-          <img src={sad_lion_icon} alt="" />
+          <img src={lionIcon} alt="" className={`lion-icon-${gameState}`}/>
         </div>
         <div className="comment">
-          아쉬워요 어흥...
-          <br />연습하고 한번 더?
+          {message}
         </div>
     </div>
   )

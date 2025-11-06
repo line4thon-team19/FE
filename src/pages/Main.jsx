@@ -12,7 +12,7 @@ const App = () => {
   const [healthData, setHealthData] = useState(null); 
   const [healthError, setHealthError] = useState(null); 
 
-  //POSt  api 관련 상태
+  //POST  api 관련 상태
   const [guestLoading, setGuestLoading] = useState(false);
   const [guestData, setGuestData] = useState(null); 
   const [guestError, setGuestError] = useState(null); 
