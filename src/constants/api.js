@@ -11,6 +11,9 @@ export const API_ENDPOINTS = {
     ANSWER: (sessionId) => `/battle/${sessionId}/answer`,
     RESULT: (sessionId) => `/battle/${sessionId}/result`,
   },
+  AUTH: {
+    GUEST: '/guest',
+  },
 };
 
 // API 상태 코드

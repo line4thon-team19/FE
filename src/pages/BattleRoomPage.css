@@ -1,0 +1,244 @@
+.battle-room {
+  height: 100vh;
+  background: #fff;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 43px 95px;
+  font-family: 'Paperlogy', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  color: #222;
+}
+
+.battle-room__container {
+  width: 100%;
+  background: #fff;
+  border-radius: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.battle-room__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.battle-room__round {
+  font-size: 40px;
+  font-weight: 700;
+}
+
+.battle-room__round-total {
+  font-size: 16px;
+  color: #8a8fa3;
+  margin-left: 4px;
+}
+
+.battle-room__title {
+  font-size: 50px;
+  font-weight: 800;
+  margin: 0;
+}
+
+.battle-room__badges {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.battle-room__badge {
+  width: 66px;
+  height: 66px;
+  object-fit: contain;
+}
+
+.battle-room__badge--empty {
+  background: #f0f1f5;
+  border-radius: 50%;
+  border: 2px dashed #d1d4e2;
+}
+
+.battle-room__session {
+  font-size: 14px;
+  color: #8a8fa3;
+}
+
+.battle-room__timer {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.battle-room__timer-icon {
+  font-size: 20px;
+}
+
+.battle-room__timer-text {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.battle-room__timer-bar {
+  flex: 1;
+  height: 12px;
+  background: #efeff6;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.battle-room__timer-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ff8800, #ffb347);
+  transition: width 0.2s ease;
+}
+
+.battle-room__question {
+  background: #f9f6ff;
+  border-radius: 16px;
+  padding: 20px;
+  font-size: 18px;
+  line-height: 1.6;
+  min-height: 96px;
+  display: flex;
+  align-items: center;
+}
+
+.battle-room__board {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.battle-room__panel {
+  background: #fff;
+  border-radius: 16px;
+  border: 2px solid #eceef7;
+  padding: 16px;
+  min-height: 240px;
+  display: flex;
+  flex-direction: column;
+}
+
+.battle-room__panel--opponent {
+  background: #f8f9fd;
+}
+
+.battle-room__panel-title {
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+.battle-room__answer-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.battle-room__answer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.8);
+  font-size: 16px;
+}
+
+.battle-room__answer--correct {
+  border-color: rgba(65, 214, 137, 0.45);
+  background: rgba(65, 214, 137, 0.18);
+}
+
+.battle-room__answer--wrong {
+  border-color: rgba(255, 125, 114, 0.4);
+  background: rgba(255, 125, 114, 0.18);
+}
+
+.battle-room__answer--empty {
+  justify-content: center;
+  color: #8a8fa3;
+  font-style: italic;
+}
+
+.battle-room__answer-result {
+  font-weight: 700;
+  margin-left: 16px;
+}
+
+.battle-room__typing {
+  margin-top: 12px;
+  font-size: 14px;
+  color: #ff8800;
+  background: rgba(255, 136, 0, 0.12);
+  padding: 8px 12px;
+  border-radius: 12px;
+}
+
+.battle-room__form {
+  margin-top: 12px;
+  display: flex;
+  gap: 12px;
+}
+
+.battle-room__input {
+  flex: 1;
+  padding: 14px 18px;
+  border-radius: 16px;
+  border: 2px solid #eceef7;
+  font-size: 16px;
+}
+
+.battle-room__input:focus {
+  outline: none;
+  border-color: #7c6dff;
+  box-shadow: 0 0 0 4px rgba(124, 109, 255, 0.18);
+}
+
+.battle-room__submit {
+  padding: 0 24px;
+  border: none;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #7c6dff 0%, #9f8cff 100%);
+  color: #fff;
+  font-weight: 700;
+  font-size: 16px;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.battle-room__submit:disabled {
+  background: #c5cae9;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.battle-room__submit:not(:disabled):hover {
+  transform: translateY(-2px);
+}
+
+.battle-room__error {
+  font-size: 18px;
+  text-align: center;
+  padding: 48px 24px;
+  border-radius: 16px;
+  background: #fff3f0;
+  color: #c62828;
+}
+
+@media (max-width: 768px) {
+  .battle-room__board {
+    grid-template-columns: 1fr;
+  }
+
+  .battle-room__container {
+    padding: 24px;
+  }
+}

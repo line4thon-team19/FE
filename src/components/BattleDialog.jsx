@@ -2,8 +2,9 @@
  * 배틀 다이얼로그 컴포넌트
  */
 
-import { useState, useEffect, useRef } from 'react';
-import { createBattleRoom, getBattleRoomStatus } from '../services/battleApi';
+import { useState, useEffect } from 'react';
+import { createBattleRoom } from '../services/battleApi';
+import { useBattleSocket } from '../hooks/useBattleSocket';
 import './BattleDialog.css';
 
 function BattleDialog({ onClose, onStart }) {
@@ -13,7 +14,8 @@ function BattleDialog({ onClose, onStart }) {
   const [isLoading, setIsLoading] = useState(false);
   const [canStart, setCanStart] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
-  const pollingIntervalRef = useRef(null);
+
+  const { remoteJoined } = useBattleSocket({ sessionId, roomCode });
 
   // 배틀룸 생성
   useEffect(() => {
@@ -21,14 +23,41 @@ function BattleDialog({ onClose, onStart }) {
       setIsLoading(true);
       try {
         const response = await createBattleRoom();
-        const roomCode = response.roomCode;
-        setSessionId(response.sessionId);
+        console.debug('[BattleDialog] createBattleRoom 응답', response);
+
+        const room =
+          response?.room ??
+          response?.roomInfo ??
+          response?.data?.room ??
+          response ??
+          {};
+        const roomCode =
+          room.roomCode ??
+          room.room_code ??
+          room.code ??
+          response?.roomCode ??
+          response?.room_code ??
+          null;
+        const session =
+          room.sessionId ??
+          room.session_id ??
+          response?.sessionId ??
+          response?.session_id ??
+          null;
+
+        if (!roomCode || !session) {
+          throw new Error('배틀룸 정보가 올바르지 않습니다.');
+        }
+
+        setSessionId(session);
         setRoomCode(roomCode);
-        
-        // 실제 URL로 초대 링크 생성
+
+        // 초대 링크에 sessionId와 roomCode 모두 포함
         const baseUrl = window.location.origin;
-        const inviteLink = `${baseUrl}/join/${roomCode}`;
+        const inviteLink = `${baseUrl}/join?sessionId=${encodeURIComponent(session)}&roomCode=${encodeURIComponent(roomCode)}`;
+        console.debug('[BattleDialog] inviteLink 생성', inviteLink);
         setInviteLink(inviteLink);
+        setCanStart(true);
       } catch (error) {
         console.error('배틀룸 생성 실패:', error);
       } finally {
@@ -39,40 +68,17 @@ function BattleDialog({ onClose, onStart }) {
     createRoom();
   }, []);
 
-  // 배틀룸 상태 확인 (폴링)
+  // 소켓에서 상대 입장 이벤트 감지
   useEffect(() => {
-    if (!roomCode) return;
+    if (remoteJoined) {
+      console.debug('[BattleDialog] remote player joined, enabling start');
+      setCanStart(true);
+    }
+  }, [remoteJoined]);
 
-    const checkRoomStatus = async () => {
-      try {
-        const status = await getBattleRoomStatus(roomCode);
-        // 플레이어가 2명 이상이면 시작 가능
-        if (status.players && status.players.length >= 2) {
-          setCanStart(true);
-          // 시작 가능하면 폴링 중지
-          if (pollingIntervalRef.current) {
-            clearInterval(pollingIntervalRef.current);
-            pollingIntervalRef.current = null;
-          }
-        }
-      } catch (error) {
-        console.error('배틀룸 상태 확인 실패:', error);
-      }
-    };
-
-    // 초기 확인
-    checkRoomStatus();
-
-    // 2초마다 상태 확인 (폴링)
-    pollingIntervalRef.current = setInterval(checkRoomStatus, 2000);
-
-    // 컴포넌트 언마운트 시 정리
-    return () => {
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-      }
-    };
-  }, [roomCode]);
+  useEffect(() => {
+    console.debug('[BattleDialog] canStart changed', canStart);
+  }, [canStart]);
 
   // 링크 복사
   const handleCopyLink = async () => {
@@ -87,7 +93,7 @@ function BattleDialog({ onClose, onStart }) {
   // 시작하기 버튼 클릭
   const handleStart = () => {
     if (canStart && onStart) {
-      onStart(sessionId);
+      onStart({ sessionId, roomCode });
     }
   };
 

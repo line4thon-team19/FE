@@ -3,36 +3,62 @@
  */
 
 import { useState, useEffect } from 'react';
-import { entryBattleRoom } from '../services/battleApi';
+import { createGuestPlayer } from '../services/battleApi';
+import { useBattleSocket } from '../hooks/useBattleSocket';
 import './EntryPage.css';
 
-function EntryPage({ roomCode, onBack }) {
+function EntryPage({ roomCode, sessionId, onBack, onReady }) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [entryData, setEntryData] = useState(null);
+  const [tokenReady, setTokenReady] = useState(false);
+  const [navigated, setNavigated] = useState(false);
 
   useEffect(() => {
-    const enterRoom = async () => {
-      if (!roomCode) {
-        setError('방 코드가 없습니다.');
-        setIsLoading(false);
-        return;
-      }
+    if (!sessionId) {
+      setError('유효하지 않은 초대 링크입니다.');
+      setIsLoading(false);
+      return;
+    }
 
+    const ensureGuestToken = async () => {
       try {
         setIsLoading(true);
-        const response = await entryBattleRoom({ roomCode });
-        setEntryData(response);
+        const guestToken = sessionStorage.getItem('guestToken');
+        if (!guestToken) {
+          console.debug('[EntryPage] guestToken 없음, 새로 발급 요청');
+          await createGuestPlayer();
+        } else {
+          console.debug('[EntryPage] 기존 guestToken 사용');
+        }
+        setTokenReady(true);
       } catch (err) {
-        console.error('배틀룸 입장 실패:', err);
-        setError('배틀룸 입장에 실패했습니다.');
+        console.error('게스트 토큰 발급 실패:', err);
+        setError('게스트 토큰 발급에 실패했습니다.');
       } finally {
         setIsLoading(false);
       }
     };
 
-    enterRoom();
-  }, [roomCode]);
+    ensureGuestToken();
+  }, [sessionId]);
+
+  const { connected, question } = useBattleSocket(
+    !tokenReady || error ? { sessionId: null, roomCode: null } : { sessionId, roomCode },
+  );
+
+  useEffect(() => {
+    if (tokenReady && connected) {
+      setIsLoading(false);
+    }
+  }, [tokenReady, connected]);
+
+  useEffect(() => {
+    if (navigated) return;
+    if (!question) return;
+    if (!onReady) return;
+    setNavigated(true);
+    onReady({ sessionId, roomCode });
+  }, [navigated, question, onReady, sessionId, roomCode]);
 
   if (isLoading) {
     return (
@@ -61,11 +87,8 @@ function EntryPage({ roomCode, onBack }) {
     <div className="entry-page">
       <div className="entry-page__container">
         <h1 className="entry-page__title">배틀룸에 입장했습니다!</h1>
-        <p className="entry-page__room-code">방 코드: {entryData?.roomCode}</p>
+        {roomCode && <p className="entry-page__room-code">방 코드: {roomCode}</p>}
         <p className="entry-page__waiting">호스트가 게임을 시작할 때까지 기다려주세요...</p>
-        <div className="entry-page__players">
-          <p>현재 플레이어: {entryData?.players?.length || 0}명</p>
-        </div>
       </div>
     </div>
   );

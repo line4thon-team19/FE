@@ -1,48 +1,125 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import StartPage from './pages/StartPage';
 import EntryPage from './pages/EntryPage';
+import BattleRoomPage from './pages/BattleRoomPage';
 import './App.css';
 
-function App() {
-  const [roomCode, setRoomCode] = useState(null);
+function parseLocation() {
+  const { pathname, search, hash } = window.location;
+  const searchParams = new URLSearchParams(search);
 
-  useEffect(() => {
-    // URL에서 roomCode 추출
-    // 예: https://app.example.com/join/A1B2C3 또는 ?roomCode=A1B2C3
-    const pathname = window.location.pathname;
-    const searchParams = new URLSearchParams(window.location.search);
-    
-    // URL 경로에서 추출 (예: /join/A1B2C3)
-    const pathMatch = pathname.match(/\/join\/([A-Z0-9]+)/);
-    if (pathMatch) {
-      setRoomCode(pathMatch[1]);
-      return;
-    }
+  const sessionIdFromQuery = searchParams.get('sessionId');
+  const roomCodeFromQuery = searchParams.get('roomCode');
+  const roleFromQuery = searchParams.get('role');
 
-    // 쿼리 파라미터에서 추출 (예: ?roomCode=A1B2C3)
-    const queryRoomCode = searchParams.get('roomCode');
-    if (queryRoomCode) {
-      setRoomCode(queryRoomCode);
-      return;
-    }
-
-    // inviteLink에서 roomCode 추출 (예: https://app.example.com/join/A1B2C3)
-    const hashMatch = window.location.hash.match(/\/join\/([A-Z0-9]+)/);
-    if (hashMatch) {
-      setRoomCode(hashMatch[1]);
-    }
-  }, []);
-
-  const handleBackToStart = () => {
-    setRoomCode(null);
-    window.history.pushState({}, '', '/');
-  };
-
-  if (roomCode) {
-    return <EntryPage roomCode={roomCode} onBack={handleBackToStart} />;
+  if (pathname.startsWith('/battle')) {
+    return {
+      page: 'battle',
+      params: {
+        sessionId: sessionIdFromQuery ?? null,
+        roomCode: roomCodeFromQuery ?? null,
+        role: roleFromQuery ?? 'guest',
+      },
+    };
   }
 
-  return <StartPage />;
+  let roomCode = null;
+  let sessionId = sessionIdFromQuery ?? null;
+
+  const joinPathMatch = pathname.match(/\/join\/([A-Z0-9]+)/);
+  if (joinPathMatch) {
+    roomCode = joinPathMatch[1];
+  }
+
+  if (roomCodeFromQuery) {
+    roomCode = roomCodeFromQuery;
+  }
+
+  if (!sessionId) {
+    const hashMatch = hash.match(/sessionId=([^&]+)/);
+    if (hashMatch) {
+      sessionId = decodeURIComponent(hashMatch[1]);
+    }
+  }
+
+  if (roomCode || sessionId) {
+    return {
+      page: 'entry',
+      params: {
+        roomCode: roomCode ?? null,
+        sessionId: sessionId ?? null,
+      },
+    };
+  }
+
+  return { page: 'start', params: {} };
+}
+
+function App() {
+  const [route, setRoute] = useState(() => parseLocation());
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setRoute(parseLocation());
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const navigateToBattle = ({ sessionId, roomCode, role }) => {
+    const params = new URLSearchParams();
+    if (sessionId) params.set('sessionId', sessionId);
+    if (roomCode) params.set('roomCode', roomCode);
+    if (role) params.set('role', role);
+    const nextUrl = `/battle?${params.toString()}`;
+    window.history.pushState({}, '', nextUrl);
+    setRoute({ page: 'battle', params: { sessionId, roomCode, role: role ?? 'guest' } });
+  };
+
+  const navigateToStart = () => {
+    window.history.pushState({}, '', '/');
+    setRoute({ page: 'start', params: {} });
+  };
+
+  const navigateToEntry = ({ sessionId, roomCode }) => {
+    const params = new URLSearchParams();
+    if (sessionId) params.set('sessionId', sessionId);
+    if (roomCode) params.set('roomCode', roomCode);
+    const nextUrl = `/join?${params.toString()}`;
+    window.history.pushState({}, '', nextUrl);
+    setRoute({ page: 'entry', params: { sessionId, roomCode } });
+  };
+
+  const routeParams = useMemo(() => route.params ?? {}, [route]);
+
+  if (route.page === 'battle') {
+    if (!routeParams.sessionId) {
+      return <div className="app-error">세션 정보가 없습니다. 초대를 다시 확인해 주세요.</div>;
+    }
+    return (
+      <BattleRoomPage
+        sessionId={routeParams.sessionId}
+        roomCode={routeParams.roomCode}
+        role={routeParams.role}
+      />
+    );
+  }
+
+  if (route.page === 'entry') {
+    if (!routeParams.sessionId) {
+      return <div className="app-error">유효하지 않은 초대 링크입니다.</div>;
+    }
+    return (
+      <EntryPage
+        roomCode={routeParams.roomCode}
+        sessionId={routeParams.sessionId}
+        onBack={navigateToStart}
+        onReady={(params) => navigateToBattle({ ...params, role: 'guest' })}
+      />
+    );
+  }
+
+  return <StartPage onNavigateBattle={navigateToBattle} />;
 }
 
 export default App;

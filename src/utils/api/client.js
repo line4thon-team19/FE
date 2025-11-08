@@ -2,9 +2,11 @@
  * API Client 설정
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://hyunseoko.store/api';
-// 기본값을 mock으로 설정 (개발 환경에서는 mock 사용)
-const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false';
+const rawBase = import.meta.env.VITE_API_BASE_URL ?? 'https://hyunseoko.store/api';
+const normalisedBase = rawBase.replace(/\/$/, '');
+const API_BASE_URL = normalisedBase.endsWith('/api') ? normalisedBase : `${normalisedBase}/api`;
+// 기본값을 실 서버와 통신하도록 설정, 필요 시 VITE_USE_MOCK=true로 덮어쓰기
+const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true';
 
 /**
  * API 요청 함수
@@ -14,7 +16,14 @@ const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false';
  */
 export async function apiRequest(endpoint, options = {}) {
   const url = `${API_BASE_URL}${endpoint}`;
-  
+
+  const guestToken = typeof window !== 'undefined' ? sessionStorage.getItem('guestToken') : null;
+  if (guestToken) {
+    console.debug('[API Client] guestToken 사용', guestToken);
+  } else {
+    console.debug('[API Client] guestToken 없음');
+  }
+
   const defaultOptions = {
     headers: {
       'Content-Type': 'application/json',
@@ -28,6 +37,7 @@ export async function apiRequest(endpoint, options = {}) {
     headers: {
       ...defaultOptions.headers,
       ...options.headers,
+      ...(guestToken ? { Authorization: `Bearer ${guestToken}` } : {}),
     },
   };
 
@@ -52,14 +62,8 @@ export async function apiRequest(endpoint, options = {}) {
  * @returns {Promise<any>}
  */
 export async function mockApiRequest(endpoint, options = {}) {
-  // Mock API 로직은 mock 서버나 직접 데이터 반환
-  // 개발 중에는 mock 데이터를 직접 반환
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      // 실제로는 mock 서버나 mock 핸들러에서 처리
-      resolve(null);
-    }, 300);
-  });
+  console.warn(`Mock API가 구현되지 않았습니다: ${endpoint}`, options);
+  return Promise.resolve(null);
 }
 
 /**
