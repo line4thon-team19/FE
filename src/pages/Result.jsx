@@ -93,36 +93,51 @@ const Result = () => {
     );
   }
   
-  // ✅ questions 필드 확인으로 수정
-  if (!gameResult || !gameResult.questions) {
-    return <div id="Result_wrap">결과 데이터 구조가 올바르지 않습니다. (questions 필드 누락)</div>;
+  let roundDetails;
+  let roundFieldName; 
+  
+  if (isPracticeMode) {
+      // 연습 모드 API 응답은 'questions' 필드를 사용
+      roundDetails = gameResult.questions;
+      roundFieldName = 'questions';
+  } else {
+      // 배틀 모드 API 응답은 'rounds' 필드를 사용
+      roundDetails = gameResult.rounds; 
+      roundFieldName = 'rounds';
+  }
+
+  if (!gameResult || !roundDetails || !Array.isArray(roundDetails)) {
+    return (
+        <div id="Result_wrap">
+            결과 데이터 구조가 올바르지 않습니다. ({roundFieldName} 필드 누락)
+        </div>
+    );
   }
 
 
   const finalStatus = isPracticeMode ? 'practice' : (gameResult.result || 'practice'); 
-  const totalRounds = gameResult.questions.length; // ✅ questions 필드 사용
-  const correctScore = gameResult.summary ? gameResult.summary.score : 0; // summary가 없을 경우 0으로 기본값 설정
+  const totalRounds = roundDetails.length; 
+  const correctScore = gameResult.summary && gameResult.summary.score !== undefined ? gameResult.summary.score : 0; 
   
-  const currentRoundDetail = gameResult.questions[currentRoundIndex]; // ✅ questions 필드 사용
+  const currentRoundDetail = roundDetails[currentRoundIndex]; 
   
-  // currentRoundDetail이 유효하지 않은 경우 (예: questions 배열이 비었을 때)를 대비한 최종 방어 코드
   if (!currentRoundDetail) {
       return <div id="Result_wrap">결과에 라운드 상세 정보가 없습니다.</div>;
   }
   
   const gameData = {
     'lose': {
-      title: "패배",
+      title: "패배", // 배틀 패배 시
       lionMessage: "아쉬워요 어흥... 연습하고 한번 더?",
       showPracticeButton: true,
     },
     'win': {
-      title: "승리",
+      title: "승리", // 배틀 승리 시
       lionMessage: "잘했어요 어흥!",
       showPracticeButton: true,
     },
     'practice': { 
-      title: isPracticeMode ? `연습 결과: ${correctScore}/${totalRounds}` : `정답 ${correctScore}/${totalRounds}`,
+      title: `정답 ${correctScore}/${totalRounds}`, 
       lionMessage: isPracticeMode ? "잘했어요 어흥! 실력 향상을 위해 다시 한번 도전해봐요!" : "잘했어요 어흥!",
       showPracticeButton: true,
     }
@@ -130,13 +145,10 @@ const Result = () => {
   
   const currentData = gameData[finalStatus] || gameData.practice; 
   
-  // currentRoundDetail.players는 없으므로 currentRoundDetail을 바로 사용
-  // 여기서는 API 응답 구조를 기반으로 필드를 재조정해야 합니다.
-  // API 응답에는 'answer', 'correctAnswer', 'explanation' 등이 currentRoundDetail에 직접 있습니다.
   const roundData = {
       round: `ROUND ${currentRoundDetail.round}`,
-      userInput: currentRoundDetail.answer || '입력 없음', // 사용자가 입력한 오답
-      isCorrect: currentRoundDetail.result === 'correct', // result 필드를 사용
+      userInput: currentRoundDetail.answer || '입력 없음', 
+      isCorrect: currentRoundDetail.result === 'correct',
       correctAnswer: currentRoundDetail.correctAnswer, 
       standardRule: currentRoundDetail.explanation, 
   };
@@ -157,7 +169,7 @@ const Result = () => {
   return (
     <div id="Result_wrap">
       <div className="title">
-        <p>게임 결과 ({isPracticeMode ? '연습 모드' : '배틀 모드'})</p>
+        <p>게임결과</p> 
         <h1 className={finalStatus}>{currentData.title}</h1>
       </div>
       <div className="lion">
