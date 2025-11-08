@@ -10,8 +10,9 @@ createRoot(document.getElementById('root')).render(
     <BrowserRouter>
     <Routes>
       <Route path='/' element={<Main />} />
-      <Route path='/result/:sessionId' element={<Result />} />
+      <Route path='/result/battle/:sessionId' element={<Result />} />
+      <Route path='/result/practice/:practiceId' element={<Result />} />
     </Routes>
     </BrowserRouter>
   </StrictMode>,
-)
+) 

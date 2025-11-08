@@ -2,14 +2,15 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import ResultCard from '../components/ResultCard';
 import LionComment from '../components/LionComment';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useLocation } from 'react-router-dom'; 
 import right_icon from '../assets/images/right.svg';
 import left_icon from '../assets/images/left.svg';
 
-const BASE_URL = 'https://hyunseoko.store/api/battle';
+const BASE_URL_DOMAIN = 'https://hyunseoko.store'; 
 
 const Result = () => {
-  const { sessionId } = useParams(); 
+  const { sessionId, practiceId } = useParams(); 
+  const location = useLocation(); 
 
   const [gameResult, setGameResult] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -17,30 +18,40 @@ const Result = () => {
 
   const [currentRoundIndex, setCurrentRoundIndex] = useState(0); 
 
+  const isPracticeMode = location.pathname.includes('/practice/');
+  const currentId = isPracticeMode ? practiceId : sessionId; 
+
   useEffect(() => {
-    if (!sessionId) {
-      setError("세션 ID가 필요합니다. 올바른 경로로 접속했는지 확인해주세요.");
+    if (!currentId) {
+      setError("게임/연습 ID가 필요합니다. 올바른 경로로 접속했는지 확인해주세요.");
       setLoading(false);
       return;
     }
 
     const fetchResult = async () => {
+      let API_URL;
+      let headers = { 'Accept': 'application/json' };
+      
       const token = localStorage.getItem('authToken'); 
       
-      // 토큰 유효성 검사 및 401 에러 방지
       if (!token) {
         setError("인증 토큰이 없어 결과를 불러올 수 없습니다. 메인 페이지에서 토큰 발급을 확인하세요.");
         setLoading(false);
         return;
       }
 
+      headers['Authorization'] = `Bearer ${token}`; 
+      
+      if (isPracticeMode) {
+        // 캐시 무효화 파라미터 추가
+        API_URL = `${BASE_URL_DOMAIN}/api/practice/${currentId}/result?t=${Date.now()}`;
+      } else {
+        // 캐시 무효화 파라미터 추가
+        API_URL = `${BASE_URL_DOMAIN}/api/battle/${currentId}/result?t=${Date.now()}`;
+      }
+
       try {
-        const response = await axios.get(`${BASE_URL}/${sessionId}/result`,{
-          headers: {
-            'Authorization': `Bearer ${token}`, 
-            'Accept': 'application/json' 
-          }
-        });
+        const response = await axios.get(API_URL, { headers });
         
         setGameResult(response.data);
         setLoading(false);
@@ -48,10 +59,10 @@ const Result = () => {
         console.error("API 호출 오류:", err);
         
         if (err.response) {
-            if (err.response.status === 401) {
-                setError("인증에 실패했습니다. 토큰이 만료되었거나 유효하지 않습니다.");
+            if (err.response.status === 401 || err.response.status === 403) {
+                setError("인증 토큰이 유효하지 않거나 권한이 없습니다.");
             } else if (err.response.status === 404) {
-                setError("해당 게임 세션을 찾을 수 없습니다.");
+                setError(`해당 ${isPracticeMode ? '연습 세션' : '게임 세션'}을 찾을 수 없습니다.`);
             } else {
                 setError(`결과를 불러오는 데 실패했습니다. (상태 코드: ${err.response.status})`);
             }
@@ -63,7 +74,8 @@ const Result = () => {
     };
 
     fetchResult();
-  }, [sessionId]); 
+  }, [currentId, isPracticeMode]); 
+
 
   if (loading) {
     return <div id="Result_wrap">결과를 불러오는 중입니다...</div>;
@@ -81,16 +93,22 @@ const Result = () => {
     );
   }
   
-  if (!gameResult || !gameResult.rounds) {
-    return <div id="Result_wrap">결과 데이터 구조가 올바르지 않습니다.</div>;
+  // ✅ questions 필드 확인으로 수정
+  if (!gameResult || !gameResult.questions) {
+    return <div id="Result_wrap">결과 데이터 구조가 올바르지 않습니다. (questions 필드 누락)</div>;
   }
 
 
-  const finalStatus = gameResult.result; 
-  const totalRounds = gameResult.rounds.length; 
-  const correctScore = gameResult.summary.score;
+  const finalStatus = isPracticeMode ? 'practice' : (gameResult.result || 'practice'); 
+  const totalRounds = gameResult.questions.length; // ✅ questions 필드 사용
+  const correctScore = gameResult.summary ? gameResult.summary.score : 0; // summary가 없을 경우 0으로 기본값 설정
   
-  const currentRoundDetail = gameResult.rounds[currentRoundIndex]; 
+  const currentRoundDetail = gameResult.questions[currentRoundIndex]; // ✅ questions 필드 사용
+  
+  // currentRoundDetail이 유효하지 않은 경우 (예: questions 배열이 비었을 때)를 대비한 최종 방어 코드
+  if (!currentRoundDetail) {
+      return <div id="Result_wrap">결과에 라운드 상세 정보가 없습니다.</div>;
+  }
   
   const gameData = {
     'lose': {
@@ -104,23 +122,25 @@ const Result = () => {
       showPracticeButton: true,
     },
     'practice': { 
-      title: `정답 ${correctScore}/${totalRounds}`,
-      lionMessage: "잘했어요 어흥!",
-      showPracticeButton: false, 
+      title: isPracticeMode ? `연습 결과: ${correctScore}/${totalRounds}` : `정답 ${correctScore}/${totalRounds}`,
+      lionMessage: isPracticeMode ? "잘했어요 어흥! 실력 향상을 위해 다시 한번 도전해봐요!" : "잘했어요 어흥!",
+      showPracticeButton: true,
     }
   };
   
   const currentData = gameData[finalStatus] || gameData.practice; 
   
+  // currentRoundDetail.players는 없으므로 currentRoundDetail을 바로 사용
+  // 여기서는 API 응답 구조를 기반으로 필드를 재조정해야 합니다.
+  // API 응답에는 'answer', 'correctAnswer', 'explanation' 등이 currentRoundDetail에 직접 있습니다.
   const roundData = {
       round: `ROUND ${currentRoundDetail.round}`,
-      userInput: currentRoundDetail.players.find(p => p.playerId === 'plr_host')?.answer || '입력 없음', 
-      isCorrect: !currentRoundDetail.players.find(p => p.playerId === 'plr_host')?.incorrect, 
-      correctAnswer: currentRoundDetail.answer, 
-      standardRule: currentRoundDetail.comment, 
+      userInput: currentRoundDetail.answer || '입력 없음', // 사용자가 입력한 오답
+      isCorrect: currentRoundDetail.result === 'correct', // result 필드를 사용
+      correctAnswer: currentRoundDetail.correctAnswer, 
+      standardRule: currentRoundDetail.explanation, 
   };
   
-  // 라운드 이동 핸들러
   const handleRoundChange = (direction) => {
     setCurrentRoundIndex(prevIndex => {
       if (direction === 'next' && prevIndex < totalRounds - 1) {
@@ -137,7 +157,7 @@ const Result = () => {
   return (
     <div id="Result_wrap">
       <div className="title">
-        <p>게임 결과</p>
+        <p>게임 결과 ({isPracticeMode ? '연습 모드' : '배틀 모드'})</p>
         <h1 className={finalStatus}>{currentData.title}</h1>
       </div>
       <div className="lion">
@@ -164,7 +184,7 @@ const Result = () => {
       <div className="btn">
         {currentData.showPracticeButton &&(
           <button className="pratice">
-          연습하러 가기
+          {isPracticeMode ? '다시 연습하기' : '연습하러 가기'}
           </button>
         )}
         <Link to='/'>
