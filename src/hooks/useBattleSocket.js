@@ -2,6 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { connectBattleSocket } from '../services/socket';
 
 const initialRoundInfo = { current: 0, total: 0 };
+const JOIN_INITIAL_DELAY_MS = 300;
+const JOIN_RETRY_DELAY_MS = 400;
+const JOIN_MAX_ATTEMPTS = 3;
 
 function ensurePlayerId() {
   if (typeof window === 'undefined') return null;
@@ -40,29 +43,64 @@ export function useBattleSocket({ sessionId, roomCode }) {
     console.debug('[useBattleSocket] connecting', { sessionId, roomCode, token, playerId: myPlayerIdRef.current });
     const socket = connectBattleSocket(sessionId, token, myPlayerIdRef.current);
     socketRef.current = socket;
+    let joinRetryTimeoutId = null;
+
+    const clearJoinRetryTimeout = () => {
+      if (joinRetryTimeoutId) {
+        clearTimeout(joinRetryTimeoutId);
+        joinRetryTimeoutId = null;
+      }
+    };
+
+    const processJoinAck = (ack) => {
+      if (ack?.ok) {
+        const myId = ack?.you?.playerId ?? ack?.playerId ?? myPlayerIdRef.current;
+        if (myId && myId !== myPlayerIdRef.current) {
+          console.debug('[BattleSocket] battle:join ack playerId 갱신', { old: myPlayerIdRef.current, next: myId });
+          myPlayerIdRef.current = myId;
+          if (typeof window !== 'undefined') {
+            sessionStorage.setItem('guestPlayerId', myId);
+          }
+        }
+        return true;
+      }
+      console.error('[BattleSocket] battle:join 실패', { ack, sessionId, roomCode });
+      return false;
+    };
+
+    const scheduleJoinAttempt = (attemptIndex) => {
+      const payload = { sessionId, ...(roomCode ? { roomCode } : {}), playerId: myPlayerIdRef.current };
+      clearJoinRetryTimeout();
+      joinRetryTimeoutId = setTimeout(() => {
+        if (!socket.connected) {
+          console.warn('[BattleSocket] battle:join 시도 전 소켓 연결이 끊김', { sessionId, roomCode, attemptIndex });
+          return;
+        }
+        console.debug('[BattleSocket] battle:join 시도', { payload, attempt: attemptIndex + 1, sessionId, roomCode });
+        socket.emit('battle:join', payload, (ack) => {
+          console.debug('[BattleSocket] battle:join ack', { ack, sessionId, roomCode, attempt: attemptIndex + 1 });
+          if (processJoinAck(ack)) {
+            clearJoinRetryTimeout();
+            return;
+          }
+          if (attemptIndex + 1 < JOIN_MAX_ATTEMPTS) {
+            console.warn('[BattleSocket] battle:join 실패, 재시도 예정', {
+              attempt: attemptIndex + 1,
+              sessionId,
+              roomCode,
+            });
+            scheduleJoinAttempt(attemptIndex + 1);
+          } else {
+            console.error('[BattleSocket] battle:join 재시도 한도 초과', { sessionId, roomCode });
+          }
+        });
+      }, attemptIndex === 0 ? JOIN_INITIAL_DELAY_MS : JOIN_RETRY_DELAY_MS);
+    };
 
     socket.on('connect', () => {
       console.debug('[BattleSocket] connected', { socketId: socket.id, sessionId, roomCode });
       setConnected(true);
-      socket.emit(
-        'battle:join',
-        { sessionId, roomCode, playerId: myPlayerIdRef.current },
-        (ack) => {
-          console.debug('[BattleSocket] battle:join ack', { ack, sessionId, roomCode });
-          if (ack?.ok) {
-            const myId = ack?.you?.playerId ?? ack?.playerId ?? myPlayerIdRef.current;
-            if (myId && myId !== myPlayerIdRef.current) {
-              console.debug('[BattleSocket] battle:join ack playerId 갱신', { old: myPlayerIdRef.current, next: myId });
-              myPlayerIdRef.current = myId;
-              if (typeof window !== 'undefined') {
-                sessionStorage.setItem('guestPlayerId', myId);
-              }
-            }
-          } else {
-            console.error('[BattleSocket] battle:join 실패', { ack, sessionId, roomCode });
-          }
-        },
-      );
+      scheduleJoinAttempt(0);
     });
 
     socket.on('connect_error', (err) => {
@@ -71,6 +109,7 @@ export function useBattleSocket({ sessionId, roomCode }) {
 
     socket.on('disconnect', (reason) => {
       console.debug('[BattleSocket] disconnected', { reason, sessionId, roomCode });
+      clearJoinRetryTimeout();
       setConnected(false);
     });
 
@@ -152,6 +191,7 @@ export function useBattleSocket({ sessionId, roomCode }) {
 
     return () => {
       console.debug('[useBattleSocket] cleanup', { sessionId, roomCode });
+      clearJoinRetryTimeout();
       socket.removeAllListeners();
       socket.disconnect();
       socketRef.current = null;

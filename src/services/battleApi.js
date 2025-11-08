@@ -20,8 +20,14 @@ function getGuestContext() {
  */
 export async function createGuestPlayer() {
   console.debug('[BattleAPI] createGuestPlayer 요청 시작');
+  if (typeof window !== 'undefined') {
+    sessionStorage.removeItem('guestToken');
+    sessionStorage.removeItem('guestTokenExpiresAt');
+    sessionStorage.removeItem('guestPlayerId');
+  }
   const response = await request(API_ENDPOINTS.AUTH.GUEST, {
     method: 'POST',
+    skipAuth: true,
   });
 
   console.debug('[BattleAPI] createGuestPlayer 응답 playerId:', response?.playerId, 'expiresAt:', response?.expiresAt);

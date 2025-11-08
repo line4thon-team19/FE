@@ -23,13 +23,8 @@ function EntryPage({ roomCode, sessionId, onBack, onReady }) {
     const ensureGuestToken = async () => {
       try {
         setIsLoading(true);
-        const guestToken = sessionStorage.getItem('guestToken');
-        if (!guestToken) {
-          console.debug('[EntryPage] guestToken 없음, 새로 발급 요청');
-          await createGuestPlayer();
-        } else {
-          console.debug('[EntryPage] 기존 guestToken 사용');
-        }
+        console.debug('[EntryPage] 게스트 토큰 재발급 요청');
+        await createGuestPlayer();
         setTokenReady(true);
       } catch (err) {
         console.error('게스트 토큰 발급 실패:', err);

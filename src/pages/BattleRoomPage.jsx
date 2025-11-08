@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useBattleSocket } from '../hooks/useBattleSocket';
 import winLion from '../assets/win_lion.svg';
 import cryLion from '../assets/cry_lion.svg';
+import timerIcon from '../assets/timer.svg';
 import './BattleRoomPage.css';
 
 function deriveAnswerEntry(source = {}) {
@@ -99,7 +100,7 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
 
   const currentRound = roundInfo?.current ?? 0;
   const totalRound = roundInfo?.total ?? 0;
-  const questionText = question?.text ?? question?.sentence ?? '문제를 기다리는 중이에요.';
+  const questionText = question?.text ?? question?.sentence ?? '';
   const remainingSeconds = typeof remainingSec === 'number' && remainingSec >= 0 ? remainingSec : null;
 
   const handleInputChange = (event) => {
@@ -158,7 +159,7 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
         </header>
 
         <div className="battle-room__timer">
-          <div className="battle-room__timer-icon" aria-hidden>⏱</div>
+          <img src={timerIcon} alt="" className="battle-room__timer-icon" aria-hidden />
           <div className="battle-room__timer-text">
             {remainingSeconds !== null ? `${remainingSeconds}초` : '대기 중'}
           </div>
@@ -170,10 +171,18 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
         <section className="battle-room__question">
           <p>{questionText}</p>
         </section>
-
+        <section className="battle-room__board-title-container">
+          <div className="battle-room__board-title">
+            <img src={winLion} alt="" className="battle-room__board-title-icon" aria-hidden />
+            나
+          </div>
+          <div className="battle-room__board-title">
+            <img src={winLion} alt="" className="battle-room__board-title-icon" aria-hidden />
+            너
+          </div>
+        </section>
         <section className="battle-room__board">
           <div className="battle-room__panel">
-            <div className="battle-room__panel-title">나</div>
             <ul className="battle-room__answer-list">
               {myAnswers.map((item) => (
                 <li key={item.id} className={item.isCorrect ? 'battle-room__answer battle-room__answer--correct' : 'battle-room__answer battle-room__answer--wrong'}>
@@ -181,11 +190,9 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
                   <span className="battle-room__answer-result">{item.isCorrect ? 'O' : 'X'}</span>
                 </li>
               ))}
-              {myAnswers.length === 0 && <li className="battle-room__answer battle-room__answer--empty">제출한 답안이 없습니다.</li>}
             </ul>
           </div>
           <div className="battle-room__panel battle-room__panel--opponent">
-            <div className="battle-room__panel-title">너</div>
             <ul className="battle-room__answer-list">
               {opponentAnswers.map((item) => (
                 <li key={item.id} className={item.isCorrect ? 'battle-room__answer battle-room__answer--correct' : 'battle-room__answer battle-room__answer--wrong'}>
@@ -193,7 +200,6 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
                   <span className="battle-room__answer-result">{item.isCorrect ? 'O' : 'X'}</span>
                 </li>
               ))}
-              {opponentAnswers.length === 0 && <li className="battle-room__answer battle-room__answer--empty">상대 답안을 기다리고 있어요.</li>}
             </ul>
             {opponentTypingText ? (
               <div className="battle-room__typing">상대가 입력 중: {opponentTypingText}</div>
@@ -210,9 +216,6 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
             className="battle-room__input"
             autoFocus
           />
-          <button type="submit" className="battle-room__submit" disabled={!inputValue.trim()}>
-            제출하기
-          </button>
         </form>
       </div>
     </div>

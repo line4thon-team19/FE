@@ -16,10 +16,13 @@ const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true';
  */
 export async function apiRequest(endpoint, options = {}) {
   const url = `${API_BASE_URL}${endpoint}`;
+  const { skipAuth = false, ...fetchOptions } = options;
 
   const guestToken = typeof window !== 'undefined' ? sessionStorage.getItem('guestToken') : null;
-  if (guestToken) {
+  if (guestToken && !skipAuth) {
     console.debug('[API Client] guestToken 사용', guestToken);
+  } else if (guestToken && skipAuth) {
+    console.debug('[API Client] guestToken 존재하지만 skipAuth 옵션으로 헤더 제외');
   } else {
     console.debug('[API Client] guestToken 없음');
   }
@@ -27,27 +30,27 @@ export async function apiRequest(endpoint, options = {}) {
   const defaultOptions = {
     headers: {
       'Content-Type': 'application/json',
-      ...options.headers,
+      ...fetchOptions.headers,
     },
   };
 
   const config = {
     ...defaultOptions,
-    ...options,
+    ...fetchOptions,
     headers: {
       ...defaultOptions.headers,
-      ...options.headers,
-      ...(guestToken ? { Authorization: `Bearer ${guestToken}` } : {}),
+      ...fetchOptions.headers,
+      ...(guestToken && !skipAuth ? { Authorization: `Bearer ${guestToken}` } : {}),
     },
   };
 
   try {
     const response = await fetch(url, config);
-    
+
     if (!response.ok) {
       throw new Error(`API Error: ${response.status} ${response.statusText}`);
     }
-    
+
     return await response.json();
   } catch (error) {
     console.error('API Request Error:', error);

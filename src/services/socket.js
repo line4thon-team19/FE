@@ -21,7 +21,6 @@ export function connectBattleSocket(sessionId, token, playerId) {
 
   return io(HTTP_BASE, {
     path: '/ws',
-    transports: ['websocket'],
     auth: {
       token,
       ...(safePlayerId ? { playerId: safePlayerId } : {}),
@@ -29,5 +28,8 @@ export function connectBattleSocket(sessionId, token, playerId) {
     query: {
       sessionId,
     },
+    transports: ['websocket', 'polling'],
+    timeout: 5000,
+    reconnectionAttempts: 3,
   });
 }

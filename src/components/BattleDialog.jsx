@@ -12,7 +12,7 @@ function BattleDialog({ onClose, onStart }) {
   const [sessionId, setSessionId] = useState('');
   const [roomCode, setRoomCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [canStart, setCanStart] = useState(false);
+  const [canStart, setCanStart] = useState(true);
   const [copySuccess, setCopySuccess] = useState(false);
 
   const { remoteJoined } = useBattleSocket({ sessionId, roomCode });

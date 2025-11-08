@@ -15,7 +15,7 @@
   border-radius: 24px;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 0px;
 }
 
 .battle-room__header {
@@ -70,21 +70,25 @@
   display: flex;
   align-items: center;
   gap: 16px;
+  margin-top: 26px;
 }
 
 .battle-room__timer-icon {
-  font-size: 20px;
+  width: 34px;
+  height: 39.667px;
+  flex-shrink: 0;
 }
 
 .battle-room__timer-text {
-  font-size: 18px;
+  font-size: 25px;
   font-weight: 600;
+  color: var(--1, #FD7811);
 }
 
 .battle-room__timer-bar {
   flex: 1;
-  height: 12px;
-  background: #efeff6;
+  height: 27px;
+  background: #f3f3f3;
   border-radius: 999px;
   overflow: hidden;
 }
@@ -97,13 +101,16 @@
 
 .battle-room__question {
   background: #f9f6ff;
-  border-radius: 16px;
-  padding: 20px;
-  font-size: 18px;
-  line-height: 1.6;
-  min-height: 96px;
+  justify-content: center;
+  align-items: center;
+  border-radius: 20px;
+  height: 98px;
   display: flex;
   align-items: center;
+  border: 1px solid #000;
+  margin-top: 31.74px;
+
+background: #FFF;
 }
 
 .battle-room__board {
@@ -113,22 +120,38 @@
 }
 
 .battle-room__panel {
-  background: #fff;
-  border-radius: 16px;
-  border: 2px solid #eceef7;
+  border-radius: 20px;
+border: 1px solid #000;
+background: #FFF;
   padding: 16px;
   min-height: 240px;
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 .battle-room__panel--opponent {
-  background: #f8f9fd;
+  border-radius: 20px;
+border: 1px solid #000;
+background: #F3F3F3;
 }
 
 .battle-room__panel-title {
   font-weight: 700;
   margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.battle-room__panel-title::before {
+  content: '';
+  width: 42px;
+  height: 42px;
+  background-image: url('../assets/win_lion.svg');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
 }
 
 .battle-room__answer-list {
@@ -184,44 +207,19 @@
 
 .battle-room__form {
   margin-top: 12px;
-  display: flex;
-  gap: 12px;
 }
 
 .battle-room__input {
-  flex: 1;
+  width: 100%;
   padding: 14px 18px;
   border-radius: 16px;
   border: 2px solid #eceef7;
   font-size: 16px;
 }
-
 .battle-room__input:focus {
   outline: none;
   border-color: #7c6dff;
   box-shadow: 0 0 0 4px rgba(124, 109, 255, 0.18);
-}
-
-.battle-room__submit {
-  padding: 0 24px;
-  border: none;
-  border-radius: 16px;
-  background: linear-gradient(135deg, #7c6dff 0%, #9f8cff 100%);
-  color: #fff;
-  font-weight: 700;
-  font-size: 16px;
-  cursor: pointer;
-  transition: transform 0.15s ease;
-}
-
-.battle-room__submit:disabled {
-  background: #c5cae9;
-  cursor: not-allowed;
-  transform: none;
-}
-
-.battle-room__submit:not(:disabled):hover {
-  transform: translateY(-2px);
 }
 
 .battle-room__error {
@@ -241,4 +239,27 @@
   .battle-room__container {
     padding: 24px;
   }
+}
+
+.battle-room__board-title-container {
+  display: flex;
+  gap: 16px;
+  margin-top: 21px;
+  margin-bottom: 10px;
+}
+
+.battle-room__board-title {
+  flex:1;
+  font-size: 20px;
+  font-weight: 700;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.battle-room__board-title-icon {
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
 }
