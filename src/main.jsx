@@ -10,7 +10,7 @@ createRoot(document.getElementById('root')).render(
     <BrowserRouter>
     <Routes>
       <Route path='/' element={<Main />} />
-      <Route path='/result' element={<Result />} />
+      <Route path='/result/:sessionId' element={<Result />} />
     </Routes>
     </BrowserRouter>
   </StrictMode>,
