@@ -7,8 +7,6 @@ npm install react-router-dom
 /FE (Root Directory)
 ├── node_modules/
 ├── public/
-│   ├── index.html
-│   └── *.svg                # 공통 에셋
 ├── src/
 │   ├── assets/              # 이미지, 폰트 등 정적 파일
 │   ├── components/          # 재사용 가능한 작은 UI 요소 (예: Timer.jsx)
