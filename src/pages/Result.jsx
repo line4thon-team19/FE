@@ -3,8 +3,8 @@ import axios from 'axios';
 import ResultCard from '../components/ResultCard';
 import LionComment from '../components/LionComment';
 import { Link, useParams, useLocation } from 'react-router-dom'; 
-import right_icon from '../assets/images/right.svg';
-import left_icon from '../assets/images/left.svg'
+import right_icon from '../assets/right.svg';
+import left_icon from '../assets/left.svg'
 
 const BASE_URL_DOMAIN = 'https://hyunseoko.store'; 
 
@@ -53,10 +53,9 @@ const Result = () => {
       try {
         const response = await axios.get(API_URL, { headers });
         
-        // ✨ 연습 모드일 경우 스코어를 직접 계산하여 결과 객체에 추가
         if (isPracticeMode && response.data.questions) {
             const correctCount = response.data.questions.filter(q => q.result === 'correct').length;
-            response.data.calculatedScore = correctCount; // 계산된 스코어를 새로운 필드로 추가
+            response.data.calculatedScore = correctCount; 
         }
         
         setGameResult(response.data);
@@ -124,10 +123,9 @@ const Result = () => {
   const finalStatus = isPracticeMode ? 'practice' : (gameResult.result || 'practice'); 
   const totalRounds = roundDetails.length; 
   
-  // ✨ 스코어 계산 로직 수정
   const correctScore = isPracticeMode 
-    ? (gameResult.calculatedScore !== undefined ? gameResult.calculatedScore : 0) // 연습 모드: 계산된 스코어 사용
-    : (gameResult.summary && gameResult.summary.score !== undefined ? gameResult.summary.score : 0); // 배틀 모드: summary.score 사용
+    ? (gameResult.calculatedScore !== undefined ? gameResult.calculatedScore : 0) 
+    : (gameResult.summary && gameResult.summary.score !== undefined ? gameResult.summary.score : 0);
   
   const currentRoundDetail = roundDetails[currentRoundIndex]; 
   
