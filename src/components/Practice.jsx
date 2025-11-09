@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from 'react-router-dom';
-
-import "../styles/practice.scss";
-
+import '../sass/practice.scss'
 import lionimg from "../assets/lion.svg";
 import sadlionimg from "../assets/sadlion.svg";
 

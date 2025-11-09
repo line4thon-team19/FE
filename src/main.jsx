@@ -7,7 +7,7 @@ import Result from './pages/Result.jsx'
 import PracticeGame from './components/Practice.jsx';
 
 import './sass/Main.scss'
-import './styles/practice.scss'
+import './sass/practice.scss'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

@@ -3,8 +3,8 @@ import axios from 'axios';
 import ResultCard from '../components/ResultCard';
 import LionComment from '../components/LionComment';
 import { Link, useParams, useLocation } from 'react-router-dom'; 
-import right_icon from '../assets/images/right.svg';
-import left_icon from '../assets/images/left.svg';
+import right_icon from '../assets/right.svg';
+import left_icon from '../assets/left.svg'
 
 const BASE_URL_DOMAIN = 'https://hyunseoko.store'; 
 
@@ -52,6 +52,11 @@ const Result = () => {
 
       try {
         const response = await axios.get(API_URL, { headers });
+        
+        if (isPracticeMode && response.data.questions) {
+            const correctCount = response.data.questions.filter(q => q.result === 'correct').length;
+            response.data.calculatedScore = correctCount; 
+        }
         
         setGameResult(response.data);
         setLoading(false);
@@ -117,7 +122,10 @@ const Result = () => {
 
   const finalStatus = isPracticeMode ? 'practice' : (gameResult.result || 'practice'); 
   const totalRounds = roundDetails.length; 
-  const correctScore = gameResult.summary && gameResult.summary.score !== undefined ? gameResult.summary.score : 0; 
+  
+  const correctScore = isPracticeMode 
+    ? (gameResult.calculatedScore !== undefined ? gameResult.calculatedScore : 0) 
+    : (gameResult.summary && gameResult.summary.score !== undefined ? gameResult.summary.score : 0);
   
   const currentRoundDetail = roundDetails[currentRoundIndex]; 
   
@@ -137,7 +145,8 @@ const Result = () => {
       showPracticeButton: true,
     },
     'practice': { 
-      title: `정답 ${correctScore}/${totalRounds}`, 
+      // isPracticeMode가 true일 때만 '정답 X/Y' 타이틀을 사용하도록 수정
+      title: isPracticeMode ? `정답 ${correctScore}/${totalRounds}` : "잘했어요 어흥!",
       lionMessage: isPracticeMode ? "잘했어요 어흥! 실력 향상을 위해 다시 한번 도전해봐요!" : "잘했어요 어흥!",
       showPracticeButton: true,
     }
@@ -194,11 +203,13 @@ const Result = () => {
         </div>
       </main>
       <div className="btn">
-        {currentData.showPracticeButton &&(
-          <button className="pratice">
-          {isPracticeMode ? '다시 연습하기' : '연습하러 가기'}
-          </button>
-        )}
+        <Link to='/practice'>
+          {currentData.showPracticeButton &&(
+            <button className="pratice">
+            {isPracticeMode ? '다시 연습하기' : '연습하러 가기'}
+            </button>
+          )}
+        </Link>
         <Link to='/'>
           <button className="home">
             홈으로 돌아가기
