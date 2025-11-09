@@ -1,9 +1,17 @@
 #root {
-  max-width: 1280px;
+  max-width: 1980px;
   margin: 0 auto;
   padding: 2rem;
   text-align: center;
 }
+
+@font-face {
+    font-family: 'Paperozi';
+    src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/2408-3@1.0/Paperlogy-7Bold.woff2') format('woff2');
+    font-weight: 700;
+    font-display: swap;
+}
+
 
 .logo {
   height: 6em;
