@@ -1,4 +1,5 @@
-# 패키지 설치
+# 📦 패키지 설치
+```bash
 npm install sass
 npm install react-router-dom
 
@@ -7,7 +8,7 @@ npm install react-router-dom
 ├── node_modules/
 ├── public/
 │   ├── index.html
-│   └── *.svg (공통 에셋)
+│   └── *.svg                # 공통 에셋
 ├── src/
 │   ├── assets/              # 이미지, 폰트 등 정적 파일
 │   ├── components/          # 재사용 가능한 작은 UI 요소 (예: Timer.jsx)
@@ -18,6 +19,7 @@ npm install react-router-dom
 │   │   └── practice.scss    # 연습 게임 관련 스타일
 │   ├── App.jsx              # (선택 사항) 최상위 래퍼 컴포넌트
 │   └── main.jsx             # React 진입점 및 라우터 설정 파일
-├──index.html
+├── index.html
 ├── package.json
 └── README.md
+
