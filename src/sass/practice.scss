@@ -71,17 +71,20 @@
 }
 
 * {
-    box-sizing: border-box
+    font-family: 'Paperozi', sans-serif !important;
 }
 
 html,
 body,
 #root {
-    max-width: 1920px;
-    min-height: 100vh;
     width: 100%;
-    margin: 0;
-    padding: 0;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    flex-direction: column;
+    align-items: center;
+    gap: 80px;
+    box-sizing: border-box;
 }
 
 body {
@@ -95,33 +98,35 @@ body {
     align-items: flex-start;
 }
 
+/* 캔버스 */
 .pg-wrap {
-    max-width: 1920px;
-    height: 100vh;
+    width: 1920px;
+    height: 1080px;
     margin: 0 auto;
-    background: #fff;
     display: grid;
     grid-template-rows: auto auto auto 1fr auto;
-    gap: 12px;
-    padding: 16px 16px 24px
+    row-gap: 24px;
+    padding: 24px 48px 32px;
+    /* 여백 넉넉히 */
+    background: #fff;
 }
 
-/* 상단 */
+/* 상단 바 */
 .pg-top {
     display: grid;
     grid-template-columns: 1fr 576px 1fr;
     align-items: center;
-    font-weight: 700
 }
 
 .pg-top__left {
-    justify-items: left;
-    font-size: 40px
+    font-size: 40px;
+    font-weight: 700;
 }
 
 .pg-top__center {
     justify-self: center;
-    font-size: 50px
+    font-size: 50px;
+    font-weight: 700;
 }
 
 .pg-top__right {
@@ -129,129 +134,124 @@ body {
 }
 
 .pg-life__icon {
-    font-size: 66.43px;
-
+    width: 67px;
+    height: 63px;
+    margin-left: 12px;
+    object-fit: contain;
 }
 
-/* 타이머 */
+/* 타이머 (아이콘+텍스트 왼쪽, 얇은 바) */
 .pg-timer {
+    width: 1800px;
+    margin: 0 auto;
     display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 10px;
-    align-items: center
-}
-
-.pg-timer__track {
-    width: 1729px;
-    height: 27px;
-    background: #F3F3F3;
-    border-radius: 20px;
-    overflow: hidden
-}
-
-.pg-timer__bar {
-    height: 27px;
-    background: var(--brand);
-    transition: width .1s linear
+    grid-template-columns: auto 1fr;
+    /* 라벨-트랙 */
+    gap: 12px;
+    align-items: center;
 }
 
 .pg-timer__label {
-    font-weight: 700;
-    min-width: 48px;
-    text-align: right
-}
-
-/* 문제 */
-.pg-question {
-    margin: auto auto;
-    width: 1732px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 18px 16px;
-    font-size: 40px;
-    line-height: 1.5
-}
-
-/* 선택지 */
-.pg-choices {
-    margin: auto auto;
-    display: grid;
-    gap: 30px;
+    display: flex;
     align-items: center;
-    justify-content: center;
+    gap: 8px;
+    font-size: 25px;
+    font-weight: 700;
+    color: #FD7811;
+    min-width: unset;
+    text-align: left;
+}
+
+.pg-timer__icon {
+    width: 32px;
+    height: 35px;
+    object-fit: contain;
+}
+
+.pg-timer__track {
+    width: 1677px;
+    height: 27px;
+    background: #F3F3F3;
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.pg-timer__bar {
+    height: 100%;
+    background: #FD7811;
+    transition: width .1s linear;
+}
+
+/* 문제 카드 */
+.pg-question {
+    width: 1732px;
+    margin: 0 auto;
+    border: 1px solid #000;
+    border-radius: 14px;
+    padding: 20px 24px;
+    font-size: 40px;
+    font-weight: 500;
+    text-align: center;
+}
+
+/* 선택지: 중앙 세로 스택, 버튼 넓이/높이/그림자 */
+.pg-choices {
+    width: 1732px;
+    margin: 150px auto 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 30px;
 }
 
 .pg-choice {
     width: 554px;
-    height: 111px;
-    padding: 18px 16px;
-    border-radius: 20px;
-    border: 1px solid var(--border);
+    height: 96px;
+    border-radius: 14px;
+    border: 1px solid #000;
     background: #fff;
     font-size: 40px;
-    font-weight: 700;
+    font-weight: 500;
     cursor: pointer;
-    transition: transform .05s ease, box-shadow .15s ease, border-color .15s ease
+    
+    box-shadow: 0 2px 0 rgba(0, 0, 0, .35);
+
+    &:hover {
+        background: #FD7811;
+        color: #fff;
+        border-color: #FD7811;
+    }
 }
 
 .pg-choice:active {
-    transform: translateY(1px)
-}
-
-.pg-choice:disabled {
-    cursor: default
+    transform: translateY(1px);
 }
 
 .pg-choice.selected {
-    background: var(--brand);
+    background: #FD7811;
     color: #fff;
-    border-color: var(--brand);
+    border-color: #FD7811;
 }
 
-
-/* 하단 버튼 */
+/* 하단 버튼: 좌/우 끝, 밝은 카드+그림자 */
 .pg-bottom {
+    width: 1732px;
+    margin: 0 auto;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0 16px;
 }
 
 .pg-btn {
     width: 390px;
     height: 103px;
+    border: none;
     border-radius: 20px;
-    padding: 16px 14px;
-    font-size: 16px;
-    font-weight: 700;
-    cursor: pointer
-}
-
-.pg-btn.primary {
-    background: #111;
-    color: #fff
-}
-
-.pg-btn.primary:disabled {
-    background: #d1d5db;
-    cursor: not-allowed
-}
-
-.pg-btn.ghost {
-    background: #f3f4f6;
-    color: #111
-}
-
-/* 카운트다운 오버레이 */
-.pg-countdown {
-    position: fixed;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(0, 0, 0, .35);
-    color: #fff;
-    font-size: 72px;
-    font-weight: 900;
-    z-index: 10;
+    font-size: 35px;
+    font-weight: 500;
+    cursor: pointer;
+    background: #f6f6f6;
+    color: #111;
+    box-shadow: 0px 4px 4px rgba(0, 0, 0, 0.25);
+    transition: all 0.15s ease;
 }

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import '../sass/practice.scss'
 import lionimg from "../assets/lion.svg";
 import sadlionimg from "../assets/sadlion.svg";
+import timericon from "../assets/timer.svg"
 
 const API = {
     START: "https://hyunseoko.store/api/practice/start",
@@ -205,6 +206,7 @@ export default function PracticeGame({ onGoHome }) {
         setCountdown(payload?.countdown?.seconds ?? 0);
     }
 
+
     return (
         <div className="pg-wrap">
             <TopBar round={idx + 1} lionHistory={lionHistory} />
@@ -268,7 +270,8 @@ function Timer({ secondsLeft }) {
     const percent = Math.max(0, Math.min(100, (secondsLeft / 20) * 100));
     return (
         <div className="pg-timer">
-            <div className="pg-timer__label">{Math.ceil(secondsLeft)}초</div>
+            <div className="pg-timer__label">
+                <img src={timericon} alt="타이머 아이콘" className="pg-timer__icon " />{Math.ceil(secondsLeft)}초</div>
             <div className="pg-timer__track">
                 <div className="pg-timer__bar" style={{ width: `${percent}%` }} />
             </div>
