@@ -1,11 +1,18 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import './index.css'
-import App from './App.jsx'
-import "./styles/practice.scss";
+import Main from './pages/Main.jsx'
+import Result from './pages/Result.jsx'
+import './sass/Main.scss'
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <App />
+    <BrowserRouter>
+    <Routes>
+      <Route path='/' element={<Main />} />
+      <Route path='/result/battle/:sessionId' element={<Result />} />
+      <Route path='/result/practice/:practiceId' element={<Result />} />
+    </Routes>
+    </BrowserRouter>
   </StrictMode>,
-)
+) 
