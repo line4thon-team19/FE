@@ -172,26 +172,26 @@ const Result = () => {
         <p>게임결과</p> 
         <h1 className={finalStatus}>{currentData.title}</h1>
       </div>
-      <div className="lion">
+      <main>
+        <div className="lion">
         <LionComment 
             message={currentData.lionMessage}
             gameState={finalStatus}
         />
       </div>
-      <main>
-        <button className="left" 
+        <div className="round_button">
+          <button className="left" 
                 onClick={() => handleRoundChange('prev')}
                 disabled={currentRoundIndex === 0}>
           <img src={left_icon} alt="이전 라운드" />
         </button>
-        
           <ResultCard data={{...roundData, round: `ROUND ${currentRoundIndex + 1} / ${totalRounds}`}}/>
-        
         <button className="right" 
                 onClick={() => handleRoundChange('next')}
                 disabled={currentRoundIndex === totalRounds - 1}>
           <img src={right_icon} alt="다음 라운드" />
         </button>
+        </div>
       </main>
       <div className="btn">
         {currentData.showPracticeButton &&(

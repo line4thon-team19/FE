@@ -77,7 +77,11 @@
         display: flex;
         flex-direction: row;
         align-items: center;
-        gap: 63px;
+        gap: 30px;
+
+        img{
+            width: 150px;
+        }
 
         .text{
             display: flex;
@@ -85,12 +89,12 @@
             align-items: center;
 
             p{
-                font-size: 54px;
+                font-size: 48px;
                 margin: 0;
             }
             
             h1{
-                font-size: 90px;
+                font-size: 70px;
                 margin: 0;
             }
         }
@@ -106,10 +110,10 @@
         display: flex;
         justify-content: center;
         align-items: center;
-        width: 537px;
-        height: 111px;
+        width: 400px;
+        height: 90px;
         border-radius: 20px;
-        font-size: 50px;
+        font-size: 40px;
         font-family: Paperozi;
         background: none;
         border: none;
@@ -128,6 +132,7 @@
 
 #Result_wrap {
     width: 100%;
+    height: 100vh;
     display: flex;
     justify-content: center;
     flex-direction: column;
@@ -141,23 +146,24 @@
         align-items: center;
 
         p{
-            font-size: 50px;
+            font-size: 40px;
             font-weight: bold;
             margin: 0;
         }
 
         h1{
-            font-size: 90px;
+            font-size: 70px;
             margin: 0;
             color: #FD7811;
         }
     }
 
     main{
-        margin-top: 100px;
+        position: relative;
+        margin-top: 80px;
         width: 100%;
-        max-width: 1360px;
-        height: 561px;
+        max-width: 1000px;
+        height: 450px;
         box-shadow: 4px 4px 20px rgba(0, 0, 0, 0.25);
         border-radius: 20px;
         box-sizing: border-box;
@@ -165,18 +171,22 @@
         display: flex;
         justify-content: center;
         align-items: center;
-        gap: 200px;
-        padding-left: 88px;
-        padding-right: 88px;
-
-        button{
-            width: 57px;
-            height: 57px;
+        
+        .round_button{
             display: flex;
             justify-content: center;
             align-items: center;
-            background:none;
-            border: none;
+            gap: 100px;
+
+            button{
+                width: 50px;
+                height: 50px;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                background:none;
+                border: none;
+            }
         }
 
     }
@@ -184,17 +194,18 @@
     .btn{
         width: 100%;
         display: flex;
-        justify-content: space-around;
+        justify-content: center;
+        gap: 400px;
         margin-top: 30px;
         
         button{
-            width: 390px;
-            height: 103px;
+            width: 300px;
+            height: 80px;
             background-color: #F3F3F3;
             border-radius: 20px;
             border: none;
             box-shadow: 0px 4px 4px rgba(0, 0, 0, 0.25);
-            font-size: 35px;
+            font-size: 30px;
             font-family: Paperozi;
         }
 
@@ -209,36 +220,36 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 36px;
+    gap: 30px;
     font-family: Paperozi;
 
     .round{
-            font-size: 30px;
+        font-size: 25px;
     }
 
     .input_container{
         display: flex;
         justify-content: center;
         align-items: center;
-        width: 1200px;
-        height: 77px;
-        background-color: #F3F3F3;
+        width: 900px;
+        height: 70px;
+        background-color: #FD7811;
+        color: #ffffff;
         border-radius: 20px;
-        font-size: 40px;
 
         .text{
-            font-size: 40px;
+            font-size: 30px;
         }
 
         .icon{
-            font-size: 40px;
+            font-size: 30px;
         }
         
     }
 
     .answer_container{
-        width: 1200px;
-        height: 234px;
+        width: 900px;
+        height: 200px;
         background-color: #F3F3F3;
         border-radius: 20px;
 
@@ -249,18 +260,18 @@
         gap: 28px;
 
         p{
-            font-size: 30px;
+            font-size: 25px;
             margin: 0;
         }
 
         .answer1{
-            font-size: 40px;
+            font-size: 30px;
             font-weight: bold;
             color: #FD7811;
         }
 
         .answer2{
-            font-size: 35px;
+            font-size: 30px;
         }
     }
     
@@ -268,15 +279,20 @@
 
 #LionComponent_wrap{
     position: absolute;
-    top: 150px;
-    left: 351px;
+    top: -80px;
+    left: 50px;
     display: flex;
-    flex-direction: row;
-    gap: 15px;
+    gap: 10px;
+    
+    .lion_icon{
+        img{
+            width: 150px;
+        }
+    }
 
     .comment{
-        margin-top: 50px;
+        margin-top: 25px;
         font-family: Paperozi;
-        font-size: 30px;
+        font-size: 25px;
     }
 }
