@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from 'react-router-dom';
+
 import "../styles/practice.scss";
 
 import lionimg from "../assets/lion.svg";
@@ -10,6 +12,8 @@ const API = {
 };
 
 export default function PracticeGame({ onGoHome }) {
+    const navigate = useNavigate();
+
     const [payload, setPayload] = useState(null);
     const [idx, setIdx] = useState(0);
     const [selected, setSelected] = useState(null);
@@ -31,10 +35,29 @@ export default function PracticeGame({ onGoHome }) {
     // 문제 로드
     useEffect(() => {
         let active = true;
+
+        const authToken = localStorage.getItem('authToken');
+        if (!authToken) {
+            console.log("Waiting for auth token...");
+            return;
+        }
+
         (async () => {
             try {
-                const res = await fetch(API.START);
-                if (!res.ok) throw new Error();
+                const res = await fetch(API.START, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${authToken}`,
+                    },
+                    body: JSON.stringify({
+                        countdown: 3,
+                    }),
+                });
+
+                if (!res.ok) throw new Error(`API 요청 실패 상태 코드: ${res.status}`);
+
+
                 const data = await res.json();
                 if (active) {
                     setPayload(data);
@@ -88,18 +111,18 @@ export default function PracticeGame({ onGoHome }) {
 
     // 시간 초과 시 자동 제출
     useEffect(() => {
-        if (secondsLeft <= 0 && !finished && countdown === 0) {
+        if (secondsLeft <= 0 && countdown === 0) {
             (async () => {
                 clearInterval(tickRef.current);
                 const data = await submitToServer(true);
                 handleAnswerResponse(data);
             })();
         }
-    }, [secondsLeft, selected, finished, countdown]);
+    }, [secondsLeft, selected, countdown]);
 
     if (!payload) return <div>로딩중...</div>;
 
-    // ✅ 서버 제출
+    // 서버 제출
     async function submitToServer(isTimeout = false) {
         const url = `https://hyunseoko.store/api/practice/${payload.sessionId}/answer`;
         const answer = isTimeout
@@ -118,7 +141,10 @@ export default function PracticeGame({ onGoHome }) {
         try {
             const r = await fetch(url, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${localStorage.getItem('authToken')}`,
+                },
                 body: JSON.stringify(body),
             });
             if (!r.ok) throw new Error("Submit failed");
@@ -130,7 +156,7 @@ export default function PracticeGame({ onGoHome }) {
         }
     }
 
-    // ✅ 서버 응답 처리
+    // 서버 응답 처리
     function handleAnswerResponse(data) {
         if (!data) return;
 
@@ -148,26 +174,30 @@ export default function PracticeGame({ onGoHome }) {
             }));
             setIdx(0);
             setSelected(null);
-            startTimer();
         } else {
-            setFinished(true);
+            const sessionId = payload.sessionId;
+            clearInterval(tickRef.current);
+
+            navigate(`/result/practice/${sessionId}`);
         }
     }
 
-    // ✅ 보기 선택
+    // 보기 선택
     function choose(i) {
         if (countdown > 0 || finished) return;
         setSelected(i);
     }
 
-    // ✅ 다음 문제 버튼 클릭 시
+    // 다음 문제 버튼 클릭 시
     async function next() {
+        if (selected === null) return;
+
         clearInterval(tickRef.current);
         const data = await submitToServer(false);
         handleAnswerResponse(data);
     }
 
-    // ✅ 다시하기
+    // 다시하기
     function restart() {
         setIdx(0);
         setSelected(null);
@@ -181,35 +211,33 @@ export default function PracticeGame({ onGoHome }) {
         <div className="pg-wrap">
             <TopBar round={idx + 1} lionHistory={lionHistory} />
 
-            <Timer secondsLeft={finished || countdown > 0 ? 0 : Math.max(0, secondsLeft)} />
+            <Timer secondsLeft={countdown > 0 ? 0 : Math.max(0, secondsLeft)} />
 
             <div className="pg-question">
-                {finished ? "연습 종료!" : q?.text}
+                {q?.text}
             </div>
 
-            {!finished && (
-                <div className="pg-choices">
-                    {q?.options?.map((opt, i) => (
-                        <button
-                            key={i}
-                            className={selected === i ? "pg-choice selected" : "pg-choice"}
-                            onClick={() => choose(i)}
-                            disabled={countdown > 0}
-                        >
-                            {opt}
-                        </button>
-                    ))}
-                </div>
-            )}
+            <div className="pg-choices">
+                {q?.options?.map((opt, i) => (
+                    <button
+                        key={i}
+                        className={selected === i ? "pg-choice selected" : "pg-choice"}
+                        onClick={() => choose(i)}
+                        disabled={countdown > 0} // countdown 중에는 비활성화
+                    >
+                        {opt}
+                    </button>
+                ))}
+            </div>
 
             <div className="pg-bottom">
                 <button className="pg-btn ghost" onClick={onGoHome}>게임 종료하기</button>
                 <button
                     className="pg-btn primary"
-                    onClick={finished ? restart : next}
-                    disabled={!finished && selected === null}
+                    onClick={next}
+                    disabled={selected === null}
                 >
-                    {finished ? "다시 하기" : "다음 문제"}
+                    다음 문제
                 </button>
             </div>
 

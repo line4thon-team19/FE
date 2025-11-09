@@ -2,6 +2,7 @@ import React from 'react'
 import axios from 'axios';
 import lion_icon from '../assets/images/lion.svg'
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 
 const HEALTH_API_URL= 'https://hyunseoko.store/api/health';
 const GUEST_API_URL = 'https://hyunseoko.store/api/guest';
@@ -16,6 +17,8 @@ const Main = () => {
   const [guestLoading, setGuestLoading] = useState(false);
   const [guestData, setGuestData] = useState(null); 
   const [guestError, setGuestError] = useState(null); 
+
+  const [isGuestTokenReady, setIsGuestTokenReady] = useState(false);
 
   // Health API 호출
   const fetchHealth = async () => {
@@ -50,6 +53,7 @@ const Main = () => {
         localStorage.setItem('authToken', guestToken);
         console.log("SUCCESS: Guest Token 발급 및 Local Storage에 'authToken'으로 저장 완료.");
         console.log("토큰 값 미리보기:", guestToken.substring(0, 15) + "..."); // 토큰 앞부분만 출력
+        setIsGuestTokenReady(true);
       } else {
 
         console.warn("WARN: API 응답에 유효한 토큰(token, guestToken 등)이 포함되어 있지 않습니다. 키를 확인하세요.");
@@ -72,6 +76,8 @@ const Main = () => {
     registerGuest();
   }, []);
 
+  const isButtonDisabled = guestLoading || !isGuestTokenReady;
+
   return (
     <div id="Main_wrap">
       <div id="Main_wrap">
@@ -84,9 +90,11 @@ const Main = () => {
         <img src={lion_icon} alt="" />
       </div>
       <div className='btn'>
-        <button className="practice_btn">
-          연습하기
-        </button>
+        <Link to='/practice'>
+          <button className="practice_btn">
+            연습하기
+          </button>
+        </Link>
         <button className="battle_btn">
           배틀하기
         </button>
