@@ -46,7 +46,7 @@ const Result = () => {
   // 환경번수에서 앱키 불러오기
   const KAKAO_APP_KEY = (typeof process !== 'undefined' && process.env.REACT_APP_KAKAO_API_KEY)
     ? process.env.REACT_APP_KAKAO_API_KEY
-    : 'YOUR_ACTUAL_KAKAO_APP_KEY';
+    : '3f8528d1896ea96379f728bfb2ac6889';
 
   useEffect(() => {
 
@@ -176,6 +176,11 @@ const Result = () => {
       lionMessage: "잘했어요 어흥!",
       showPracticeButton: true,
     },
+    'tie': {
+      title: "무승부", // 배틀 무승부 시
+      lionMessage: "아쉬워요 어흥... 연습하고 한번 더?",
+      showPracticeButton: true,
+    },
     'practice': {
       // isPracticeMode가 true일 때만 '정답 X/Y' 타이틀을 사용하도록 수정
       title: isPracticeMode ? `정답 ${correctScore}/${totalRounds}` : "잘했어요 어흥!",
@@ -219,13 +224,24 @@ const Result = () => {
     }
 
     // 공유 카드에 표시할 이미지 URL을 승패에 따라 다르게 설정합니다.
-    const WIN_URL = 'https://raw.githubusercontent.com/line4thon-team19/FE/dev/public/share_images/lion_lose.svg';
+    const WIN_URL = 'https://raw.githubusercontent.com/line4thon-team19/FE/dev/public/share_images/lion_win.svg';
     const LOSE_URL = 'https://raw.githubusercontent.com/line4thon-team19/FE/dev/public/share_images/lion_lose.svg';
+    const TIE_URL = LOSE_URL;
 
-    const shareImageUrl = finalStatus === 'win' ? WIN_URL : LOSE_URL;
+    let imageUrlToShare;
 
-    // 공유 메시지에 사용할 동적 데이터 구성
-    const shareStatusText = finalStatus === 'win' ? '최종 승리' : '최종 패배';
+    if (finalStatus === 'win') {
+      imageUrlToShare = WIN_URL;
+    } else if (finalStatus === 'tie') { // 무승부 로직 추가
+      imageUrlToShare = TIE_URL;
+    } else { // lose
+      imageUrlToShare = LOSE_URL;
+    }
+
+    // 공유 메시지 텍스트도 무승부를 고려해 수정
+    const shareStatusText =
+      finalStatus === 'win' ? '최종 승리' :
+        finalStatus === 'tie' ? '무승부' : '최종 패배';
 
     const shareTitle = `[한글 대왕] 나의 결과는 ${shareStatusText}입니다!`;
     const shareDescription = currentData.lionMessage;
@@ -239,7 +255,7 @@ const Result = () => {
       content: {
         title: shareTitle,
         description: shareDescription,
-        imageUrl: shareImageUrl, // 동적으로 결정된 이미지 URL 사용
+        imageUrl: imageUrlToShare, // 동적으로 결정된 이미지 URL 사용
         link: {
           mobileWebUrl: shareLink,
           webUrl: shareLink,
