@@ -219,9 +219,10 @@ const Result = () => {
     }
 
     // 공유 카드에 표시할 이미지 URL을 승패에 따라 다르게 설정합니다.
-    const shareImageUrl = finalStatus === 'win'
-      ? `${window.location.origin}/share_images/lion_win_share.png`
-      : `${window.location.origin}/share_images/sadlion_lose_share.png`;
+    const WIN_URL = 'https://raw.githubusercontent.com/line4thon-team19/FE/dev/public/share_images/lion_lose.svg';
+    const LOSE_URL = 'https://raw.githubusercontent.com/line4thon-team19/FE/dev/public/share_images/lion_lose.svg';
+
+    const shareImageUrl = finalStatus === 'win' ? WIN_URL : LOSE_URL;
 
     // 공유 메시지에 사용할 동적 데이터 구성
     const shareStatusText = finalStatus === 'win' ? '최종 승리' : '최종 패배';
