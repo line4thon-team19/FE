@@ -293,9 +293,9 @@ const Result = () => {
         </Link>
 
         {isPracticeMode && currentData.showPracticeButton && (
-          <Link to='/practice'>
+          <Link to='https://primary.ebs.co.kr/course/grade/list?page=1&sortSequence=5&lvlCd=&viewType=normal&clsfsSysId=21000011&orderClsfsSysId=21000015&sch_check=&searchKeyword=&seriesId='>
             <button className="practice">
-              다시 연습하기
+              EBS에서 더 공부하기
             </button>
           </Link>
         )}
