@@ -5,8 +5,6 @@ import LionComment from '../components/LionComment';
 import { Link, useParams, useLocation } from 'react-router-dom';
 import right_icon from '../assets/right.svg';
 import left_icon from '../assets/left.svg'
-import lion_win from '../assets/lion.svg'
-import lion_lose from '../assets/sadlion.svg'
 
 const BASE_URL_DOMAIN = 'https://hyunseoko.store';
 
@@ -224,18 +222,18 @@ const Result = () => {
     }
 
     // 공유 카드에 표시할 이미지 URL을 승패에 따라 다르게 설정합니다.
-    const WIN_URL = 'https://raw.githubusercontent.com/line4thon-team19/FE/dev/public/share_images/lion_win.svg';
-    const LOSE_URL = 'https://raw.githubusercontent.com/line4thon-team19/FE/dev/public/share_images/lion_lose.svg';
-    const TIE_URL = LOSE_URL;
+    const WIN_URL = 'https://hyunseoko.store/share_images/win.png';
+    const LOSE_URL = 'https://hyunseoko.store/share_images/lose.png';
+    const TIE_URL = 'https://hyunseoko.store/share_images/tie.png';
 
-    let imageUrlToShare;
+    let shareImageUrl;
 
     if (finalStatus === 'win') {
-      imageUrlToShare = WIN_URL;
+      shareImageUrl = WIN_URL;
     } else if (finalStatus === 'tie') { // 무승부 로직 추가
-      imageUrlToShare = TIE_URL;
+      shareImageUrl = TIE_URL;
     } else { // lose
-      imageUrlToShare = LOSE_URL;
+      shareImageUrl = LOSE_URL;
     }
 
     // 공유 메시지 텍스트도 무승부를 고려해 수정
@@ -247,15 +245,15 @@ const Result = () => {
     const shareDescription = currentData.lionMessage;
 
     // 현재 결과 페이지 URL 생성
-    const resultPath = `/battle/${sessionId}/result`;
-    const shareLink = `${window.location.origin}${resultPath}`;
+    const resultPath = `/`;
+    const shareLink = `${window.location.origin}${resultPath}?t=${Date.now()}`;
 
     window.Kakao.Share.sendDefault({
       objectType: 'feed',
       content: {
         title: shareTitle,
         description: shareDescription,
-        imageUrl: imageUrlToShare, // 동적으로 결정된 이미지 URL 사용
+        imageUrl: shareImageUrl, // 동적으로 결정된 이미지 URL 사용
         link: {
           mobileWebUrl: shareLink,
           webUrl: shareLink,
@@ -263,7 +261,7 @@ const Result = () => {
       },
       buttons: [
         {
-          title: '내 결과 보러가기',
+          title: '나도 한번..?',
           link: {
             mobileWebUrl: shareLink,
             webUrl: shareLink,
