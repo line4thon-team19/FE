@@ -7,6 +7,7 @@ export const API_ENDPOINTS = {
   BATTLE: {
     ROOMS: '/battle/rooms',
     ENTRY: '/battle/entry',
+    DETAIL: (sessionId) => `/battle/${sessionId}`,
     START: (sessionId) => `/battle/${sessionId}/start`,
     ANSWER: (sessionId) => `/battle/${sessionId}/answer`,
     RESULT: (sessionId) => `/battle/${sessionId}/result`,

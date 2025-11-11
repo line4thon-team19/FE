@@ -129,3 +129,17 @@ export async function getBattleResult(sessionId) {
   });
 }
 
+/**
+ * 배틀룸 현재 상태 조회
+ * GET /api/battle/{sessionId}
+ */
+export async function getBattleSession(sessionId) {
+  if (!sessionId) {
+    throw new Error('sessionId가 필요합니다.');
+  }
+  console.debug('[BattleAPI] getBattleSession 요청', sessionId);
+  return request(API_ENDPOINTS.BATTLE.DETAIL(sessionId), {
+    method: 'GET',
+  });
+}
+

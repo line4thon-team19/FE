@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useBattleSocket } from '../hooks/useBattleSocket';
+import { getBattleSession } from '../services/battleApi';
 import winLion from '../assets/win_lion.svg';
 import cryLion from '../assets/cry_lion.svg';
 import timerIcon from '../assets/timer.svg';
@@ -40,6 +41,7 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
   const latestTypingRef = useRef({});
   const inputRef = useRef(null);
   const isComposingRef = useRef(false);
+  const previousRoundRef = useRef(null);
 
   const connectDelayMs = role === 'host' ? 500 : 0;
   const joinInitialDelayMs = role === 'host' ? 1500 : 600;
@@ -50,11 +52,49 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
     roundInfo,
     typingSnapshot,
     answerJudged,
-    summary,
+    roundEndEvent,
     sendTypingSnapshot,
     submitAnswer,
     playerId,
   } = useBattleSocket({ sessionId, roomCode, connectDelayMs, joinInitialDelayMs });
+
+  const loadBadgeStates = useCallback(async () => {
+    if (!sessionId || !playerId) return null;
+    const response = await getBattleSession(sessionId);
+    console.log('[BattleRoomPage] 배지 summary 응답', {
+      sessionId,
+      playerId,
+      summary: response?.summary,
+    });
+    const mySummary = Array.isArray(response?.summary)
+      ? response.summary.find((entry) => entry?.playerId === playerId)
+      : null;
+    if (!mySummary) {
+      console.warn('[BattleRoomPage] 내 요약 정보를 찾지 못했습니다.', {
+        playerId,
+        summary: response?.summary,
+      });
+      return null;
+    }
+    const roundResults = Array.isArray(mySummary?.isCorrectByRound) ? mySummary.isCorrectByRound : null;
+    if (!roundResults) {
+      console.log('[BattleRoomPage] 배지 정보 응답에 isCorrectByRound 없음', {
+        sessionId,
+        playerId,
+        summary: response?.summary,
+      });
+      return null;
+    }
+    const next = Array(MAX_BADGES).fill('empty');
+    for (let i = 0; i < Math.min(roundResults.length, MAX_BADGES); i += 1) {
+      if (roundResults[i] === true) {
+        next[i] = 'win';
+      } else if (roundResults[i] === false) {
+        next[i] = 'lose';
+      }
+    }
+    return { next, roundResults };
+  }, [sessionId, playerId]);
 
   const opponentTypingText = useMemo(() => {
     if (!typingSnapshot || typingSnapshot.playerId === playerId) return '';
@@ -67,20 +107,6 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
     const textValue = typeof typingSnapshot.text === 'string' ? typingSnapshot.text : '';
     latestTypingRef.current[typingSnapshot.playerId] = textValue;
   }, [typingSnapshot]);
-
-  const updateBadgeStates = (roundSummary) => {
-    if (!Array.isArray(roundSummary)) return;
-    const wins = roundSummary.filter((round) => round?.winner === playerId).length;
-    const losses = roundSummary.filter((round) => round?.winner && round.winner !== playerId).length;
-    const next = Array(MAX_BADGES).fill('empty');
-    for (let i = 0; i < Math.min(wins, MAX_BADGES); i += 1) {
-      next[i] = 'win';
-    }
-    for (let i = wins; i < Math.min(wins + losses, MAX_BADGES); i += 1) {
-      next[i] = 'lose';
-    }
-    setBadgeStates(next);
-  };
 
   useEffect(() => {
     if (sessionId && roomCode) {
@@ -136,20 +162,91 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
       const next = [...prev, { ...entry, id: `${Date.now()}_${Math.random()}` }];
       return next.slice(-10);
     });
-    if (Array.isArray(answerJudged.rounds)) {
-      updateBadgeStates(answerJudged.rounds);
-    } else if (Array.isArray(answerJudged.summary)) {
-      updateBadgeStates(answerJudged.summary);
-    }
   }, [answerJudged, playerId]);
 
   useEffect(() => {
-    if (Array.isArray(summary?.rounds)) {
-      updateBadgeStates(summary.rounds);
-    } else if (Array.isArray(summary)) {
-      updateBadgeStates(summary);
+    if (!sessionId || !playerId) return;
+    const currentRound = typeof roundInfo?.current === 'number' ? roundInfo.current : null;
+    const previousRound =
+      typeof previousRoundRef.current === 'number' ? previousRoundRef.current : null;
+
+    let shouldFetch = false;
+    let reason = null;
+
+    if (typeof currentRound === 'number' && currentRound > 0) {
+      if (previousRound === null || Number.isNaN(previousRound)) {
+        shouldFetch = true;
+        reason = 'INITIAL_LOAD';
+      } else if (typeof previousRound === 'number' && currentRound > previousRound) {
+        shouldFetch = true;
+        reason = `ROUND_ADVANCED_${previousRound}_TO_${currentRound}`;
+      }
     }
-  }, [summary]);
+
+    previousRoundRef.current = currentRound;
+
+    if (!shouldFetch) {
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      console.log('[BattleRoomPage] 배지 정보 갱신 요청 시작', {
+        sessionId,
+        playerId,
+        reason,
+        previousRound,
+        currentRound,
+      });
+      try {
+        const result = await loadBadgeStates();
+        if (!result) return;
+        if (!cancelled) {
+          const { next, roundResults } = result;
+          console.log('[BattleRoomPage] 배지 정보 갱신 완료', { next, roundResults, reason });
+          setBadgeStates(next);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error('[BattleRoomPage] 배지 정보 갱신 실패', error);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId, playerId, roundInfo?.current, loadBadgeStates]);
+
+  useEffect(() => {
+    if (!sessionId || !playerId) return;
+    if (!roundEndEvent || roundEndEvent.state !== 'ENDED') return;
+    let cancelled = false;
+    console.log('[BattleRoomPage] 배지 정보 갱신 요청 시작', {
+      sessionId,
+      playerId,
+      reason: 'FINAL_ROUND_ENDED',
+      roundEndEvent,
+    });
+    (async () => {
+      try {
+        const result = await loadBadgeStates();
+        if (!result) return;
+        if (!cancelled) {
+          const { next, roundResults } = result;
+          console.log('[BattleRoomPage] 배지 정보 갱신 완료', { next, roundResults, reason: 'FINAL_ROUND_ENDED' });
+          setBadgeStates(next);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error('[BattleRoomPage] 배지 정보 갱신 실패', error);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId, playerId, roundEndEvent, loadBadgeStates]);
 
   useEffect(() => {
     if (question && !hasJoined) {
@@ -223,6 +320,10 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
         console.debug('[BattleRoomPage] pendingAnswersRef 저장', { key, value: trimmed });
       }
       await submitAnswer({ round: currentRound, answerText: trimmed });
+      console.log('[BattleRoomPage] 소켓 정답 제출 성공', {
+        round: currentRound,
+        playerId,
+      });
       setInputValue('');
       if (inputRef.current) {
         inputRef.current.value = '';

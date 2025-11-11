@@ -33,6 +33,7 @@ export function useBattleSocket({
   const [typingSnapshot, setTypingSnapshot] = useState(null);
   const [answerJudged, setAnswerJudged] = useState(null);
   const [summary, setSummary] = useState(null);
+  const [lastRoundEndEvent, setLastRoundEndEvent] = useState(null);
   const myPlayerIdRef = useRef(ensurePlayerId());
   const typingCacheRef = useRef({});
 
@@ -209,6 +210,15 @@ export function useBattleSocket({
       socket.on('battle:round:end', (payload = {}) => {
         console.log('[BattleSocket] battle:round:end', { payload, sessionId, roomCode });
         setRemainingSec(0);
+        if (payload.round) {
+          setRoundInfo(payload.round);
+        }
+        setLastRoundEndEvent({
+          round: payload?.round?.current ?? payload?.round ?? null,
+          total: payload?.round?.total ?? null,
+          state: payload?.state ?? null,
+          ts: Date.now(),
+        });
         if (payload.state === 'ENDED') {
           setRemoteJoined(false);
         }
@@ -273,6 +283,7 @@ export function useBattleSocket({
       setRoundInfo(initialRoundInfo);
       setRemainingSec(null);
       setSummary(null);
+      setLastRoundEndEvent(null);
     };
   }, [sessionId, roomCode, connectDelayMs, joinInitialDelayMs, joinRetryDelayMs, shouldJoin]);
 
@@ -323,6 +334,7 @@ export function useBattleSocket({
     typingSnapshot,
     answerJudged,
     summary,
+    roundEndEvent: lastRoundEndEvent,
     sendTypingSnapshot,
     submitAnswer,
     playerId: myPlayerIdRef.current,
