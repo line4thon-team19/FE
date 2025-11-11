@@ -1,6 +1,6 @@
 import React from 'react'
 import axios from 'axios';
-import lion_icon from '../assets/images/lion.svg'
+import lion_icon from '../assets/lion.svg'
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 
