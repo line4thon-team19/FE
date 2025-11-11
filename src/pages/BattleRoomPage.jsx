@@ -178,6 +178,8 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
     question?.value ??
     DEFAULT_PLACEHOLDER;
   const remainingSeconds = typeof remainingSec === 'number' && remainingSec >= 0 ? remainingSec : null;
+  const myRoundWins = badgeStates.filter((state) => state === 'win').length;
+  const opponentRoundWins = badgeStates.filter((state) => state === 'lose').length;
 
   const handleInputChange = (event) => {
     const value = event.target.value;
