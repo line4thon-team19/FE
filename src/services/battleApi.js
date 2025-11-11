@@ -74,15 +74,36 @@ export async function createBattleRoom(data = {}) {
 }
 
 /**
+ * 배틀룸 입장 요청
+ * POST /api/battle/entry
+ * @param {string} roomCode - 초대 코드
+ * @returns {Promise<object>} 배틀룸 정보
+ */
+export async function enterBattleRoom(roomCode) {
+  if (!roomCode) {
+    throw new Error('roomCode가 필요합니다.');
+  }
+  console.debug('[BattleAPI] enterBattleRoom 요청', { roomCode });
+  const response = await request(API_ENDPOINTS.BATTLE.ENTRY, {
+    method: 'POST',
+    body: JSON.stringify({ roomCode }),
+  });
+  console.debug('[BattleAPI] enterBattleRoom 응답', response);
+  return response;
+}
+
+/**
  * 배틀룸 시작
  * POST /api/battle/{sessionId}/start
  */
 export async function startBattleRoom(sessionId, data = {}) {
   console.debug('[BattleAPI] startBattleRoom 요청', sessionId, data);
-  return request(API_ENDPOINTS.BATTLE.START(sessionId), {
+  const response = await request(API_ENDPOINTS.BATTLE.START(sessionId), {
     method: 'POST',
     body: JSON.stringify(data),
   });
+  console.debug('[BattleAPI] startBattleRoom 응답', response);
+  return response;
 }
 
 /**

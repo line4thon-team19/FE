@@ -28,7 +28,7 @@ export function connectBattleSocket(sessionId, token, playerId) {
     query: {
       sessionId,
     },
-    transports: ['websocket', 'polling'],
+    transports: ['websocket'],
     timeout: 5000,
     reconnectionAttempts: 3,
   });

@@ -26,7 +26,7 @@ function parseLocation() {
   let roomCode = null;
   let sessionId = sessionIdFromQuery ?? null;
 
-  const joinPathMatch = pathname.match(/\/join\/([A-Z0-9]+)/);
+  const joinPathMatch = pathname.match(/\/join\/([A-Za-z0-9]+)/);
   if (joinPathMatch) {
     roomCode = joinPathMatch[1];
   }
@@ -84,8 +84,9 @@ function App() {
   const navigateToEntry = ({ sessionId, roomCode }) => {
     const params = new URLSearchParams();
     if (sessionId) params.set('sessionId', sessionId);
-    if (roomCode) params.set('roomCode', roomCode);
-    const nextUrl = `/join?${params.toString()}`;
+    const path = roomCode ? `/join/${encodeURIComponent(roomCode)}` : '/join';
+    const queryString = params.toString();
+    const nextUrl = queryString ? `${path}?${queryString}` : path;
     window.history.pushState({}, '', nextUrl);
     setRoute({ page: 'entry', params: { sessionId, roomCode } });
   };
@@ -106,9 +107,6 @@ function App() {
   }
 
   if (route.page === 'entry') {
-    if (!routeParams.sessionId) {
-      return <div className="app-error">유효하지 않은 초대 링크입니다.</div>;
-    }
     return (
       <EntryPage
         roomCode={routeParams.roomCode}

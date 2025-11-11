@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useBattleSocket } from '../hooks/useBattleSocket';
 import winLion from '../assets/win_lion.svg';
 import cryLion from '../assets/cry_lion.svg';
@@ -6,13 +6,29 @@ import timerIcon from '../assets/timer.svg';
 import './BattleRoomPage.css';
 
 function deriveAnswerEntry(source = {}) {
-  if (!source) return { text: '', isCorrect: false };  
-  const text = source.answer ?? source.text ?? source.content ?? '';
-  const isCorrect = Boolean(source.isCorrect ?? source.correct ?? source.result === 'CORRECT');
+  if (!source) return { text: '', isCorrect: false };
+  const textCandidate =
+    source.submittedText ??
+    source.answer ??
+    source.answerText ??
+    source.text ??
+    source.content ??
+    source.preview ??
+    source.submittedText ??
+    '';
+  const text =
+    typeof textCandidate === 'string' && textCandidate.trim().length > 0
+      ? textCandidate.trim()
+      : (Array.isArray(source.answers) ? source.answers.join(', ') : '') || DEFAULT_PLACEHOLDER;
+  const resultFlag = typeof source.result === 'string' ? source.result.toUpperCase() : source.result;
+  const isCorrect = Boolean(
+    source.isCorrect ?? source.correct ?? resultFlag === 'CORRECT' ?? resultFlag === 'PASS',
+  );
   return { text, isCorrect };
 }
 
 const MAX_BADGES = 5;
+const DEFAULT_PLACEHOLDER = '(내용 없음)';
 
 function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
   const [inputValue, setInputValue] = useState('');
@@ -20,6 +36,13 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
   const [opponentAnswers, setOpponentAnswers] = useState([]);
   const [hasJoined, setHasJoined] = useState(false);
   const [badgeStates, setBadgeStates] = useState(Array(MAX_BADGES).fill('empty'));
+  const pendingAnswersRef = useRef({});
+  const latestTypingRef = useRef({});
+  const inputRef = useRef(null);
+  const isComposingRef = useRef(false);
+
+  const connectDelayMs = role === 'host' ? 500 : 0;
+  const joinInitialDelayMs = role === 'host' ? 1500 : 600;
 
   const {
     question,
@@ -31,12 +54,19 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
     sendTypingSnapshot,
     submitAnswer,
     playerId,
-  } = useBattleSocket({ sessionId, roomCode });
+  } = useBattleSocket({ sessionId, roomCode, connectDelayMs, joinInitialDelayMs });
 
   const opponentTypingText = useMemo(() => {
     if (!typingSnapshot || typingSnapshot.playerId === playerId) return '';
-    return typingSnapshot.text ?? '';
+    const raw = typingSnapshot.preview ?? typingSnapshot.text ?? typingSnapshot.answerText ?? '';
+    return typeof raw === 'string' ? raw : '';
   }, [typingSnapshot, playerId]);
+
+  useEffect(() => {
+    if (!typingSnapshot?.playerId) return;
+    const textValue = typeof typingSnapshot.text === 'string' ? typingSnapshot.text : '';
+    latestTypingRef.current[typingSnapshot.playerId] = textValue;
+  }, [typingSnapshot]);
 
   const updateBadgeStates = (roundSummary) => {
     if (!Array.isArray(roundSummary)) return;
@@ -59,9 +89,49 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
   }, [sessionId, roomCode, role]);
 
   useEffect(() => {
+    console.debug('[BattleRoomPage] roundInfo 업데이트', roundInfo);
+  }, [roundInfo]);
+
+  useEffect(() => {
+    if (!question) return;
+    console.debug('[BattleRoomPage] question 업데이트', question);
+  }, [question]);
+
+  useEffect(() => {
+    if (typeof remainingSec === 'number') {
+      console.debug('[BattleRoomPage] remainingSec 업데이트', remainingSec);
+    }
+  }, [remainingSec]);
+
+  useEffect(() => {
     if (!answerJudged || !answerJudged.playerId) return;
+    console.debug('[BattleRoomPage] answerJudged 수신', answerJudged);
+    console.debug('[BattleRoomPage] 최신 typingSnapshot 기록', latestTypingRef.current);
+    console.debug('[BattleRoomPage] pendingAnswersRef', pendingAnswersRef.current);
+    const entryKey = `${answerJudged.playerId}:${answerJudged.round ?? roundInfo?.current ?? 0}`;
     const entry = deriveAnswerEntry(answerJudged);
-    const targetSetter = answerJudged.playerId === playerId ? setMyAnswers : setOpponentAnswers;
+    if (!entry.text || entry.text === '(내용 없음)') {
+      const pending = pendingAnswersRef.current[entryKey];
+      if (pending && pending.trim().length > 0) {
+        entry.text = pending;
+        console.debug('[BattleRoomPage] pendingAnswersRef 활용', { entryKey, text: entry.text });
+      } else {
+        const latestTyping = latestTypingRef.current[answerJudged.playerId];
+        if (latestTyping && latestTyping.trim().length > 0) {
+          entry.text = latestTyping;
+          console.debug('[BattleRoomPage] latestTyping 활용', {
+            playerId: answerJudged.playerId,
+            text: entry.text,
+          });
+        }
+        if (!entry.text || entry.text.trim().length === 0) {
+          entry.text = DEFAULT_PLACEHOLDER;
+        }
+      }
+    }
+    delete pendingAnswersRef.current[entryKey];
+    const isMine = answerJudged.playerId === playerId;
+    const targetSetter = isMine ? setMyAnswers : setOpponentAnswers;
     targetSetter((prev) => {
       const next = [...prev, { ...entry, id: `${Date.now()}_${Math.random()}` }];
       return next.slice(-10);
@@ -100,23 +170,62 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
 
   const currentRound = roundInfo?.current ?? 0;
   const totalRound = roundInfo?.total ?? 0;
-  const questionText = question?.text ?? question?.sentence ?? '';
+  const questionText =
+    question?.text ??
+    question?.sentence ??
+    question?.correctSentence ??
+    question?.question ??
+    question?.value ??
+    DEFAULT_PLACEHOLDER;
   const remainingSeconds = typeof remainingSec === 'number' && remainingSec >= 0 ? remainingSec : null;
 
   const handleInputChange = (event) => {
     const value = event.target.value;
     setInputValue(value);
-    if (!value.trim()) return;
+    if (isComposingRef.current) {
+      return;
+    }
+    if (!value) return;
+    console.debug('[BattleRoomPage] handleInputChange', { value, round: currentRound, playerId });
+    sendTypingSnapshot({ round: currentRound, text: value });
+  };
+
+  const handleCompositionStart = () => {
+    isComposingRef.current = true;
+  };
+
+  const handleCompositionEnd = (event) => {
+    isComposingRef.current = false;
+    const value = event.target.value;
+    setInputValue(value);
+    if (!value) return;
+    console.debug('[BattleRoomPage] handleCompositionEnd', { value, round: currentRound, playerId });
     sendTypingSnapshot({ round: currentRound, text: value });
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    const trimmed = inputValue.trim();
+    const rawValue = inputRef.current ? inputRef.current.value : inputValue;
+    const trimmed = rawValue.trim();
     if (!trimmed) return;
     try {
+      console.log('[BattleRoomPage] handleSubmit', {
+        rawValue,
+        trimmed,
+        round: currentRound,
+        playerId,
+      });
+      if (playerId) {
+        const key = `${playerId}:${currentRound}`;
+        pendingAnswersRef.current[key] = trimmed;
+        console.debug('[BattleRoomPage] pendingAnswersRef 저장', { key, value: trimmed });
+      }
       await submitAnswer({ round: currentRound, answerText: trimmed });
       setInputValue('');
+      if (inputRef.current) {
+        inputRef.current.value = '';
+      }
+      sendTypingSnapshot({ round: currentRound, text: '' });
     } catch (error) {
       console.error('[BattleRoomPage] submit 실패', error);
     }
@@ -175,10 +284,16 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
           <div className="battle-room__board-title">
             <img src={winLion} alt="" className="battle-room__board-title-icon" aria-hidden />
             나
+            {myRoundWins > 0 && <span className="battle-room__win-count">+{myRoundWins}</span>}
           </div>
           <div className="battle-room__board-title">
             <img src={winLion} alt="" className="battle-room__board-title-icon" aria-hidden />
             너
+            {opponentRoundWins > 0 && (
+              <span className="battle-room__win-count battle-room__win-count--opponent">
+                +{opponentRoundWins}
+              </span>
+            )}
           </div>
         </section>
         <section className="battle-room__board">
@@ -210,8 +325,11 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
         <form className="battle-room__form" onSubmit={handleSubmit}>
           <input
             type="text"
+            ref={inputRef}
             value={inputValue}
             onChange={handleInputChange}
+            onCompositionStart={handleCompositionStart}
+            onCompositionEnd={handleCompositionEnd}
             placeholder="정답을 입력해 주세요!"
             className="battle-room__input"
             autoFocus

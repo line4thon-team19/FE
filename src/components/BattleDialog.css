@@ -121,3 +121,17 @@
   background: #FD7811;
 }
 
+.battle-dialog__start-button--countdown {
+  background: linear-gradient(135deg, #fd7811 0%, #ffaf50 100%);
+  color: #fff;
+  font-size: 2.5rem;
+  font-weight: 800;
+}
+
+.battle-dialog__countdown-hint {
+  margin-top: 16px;
+  text-align: center;
+  color: #555;
+  font-size: 1rem;
+}
+

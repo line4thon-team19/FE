@@ -42,16 +42,20 @@ function StartPage({ onNavigateBattle }) {
   };
 
   const handleStartBattle = async ({ sessionId, roomCode }) => {
-    if (!sessionId) return;
-    setShowBattleDialog(false);
-
+    if (!sessionId) return false;
     try {
-      console.debug('[StartPage] 배틀 시작 요청', { sessionId });
-      await startBattleRoom(sessionId, { countdownSec: 3 });
+      console.log('[StartPage] 배틀 시작 요청', { sessionId });
+      const response = await startBattleRoom(sessionId, { countdownSec: 3 });
+      console.log('[StartPage] 배틀 시작 API 성공', { sessionId, roomCode, response });
+      return true;
     } catch (error) {
-      console.error('[StartPage] 배틀 시작 API 실패', error);
+      console.log('[StartPage] 배틀 시작 API 실패', error);
+      return false;
     }
+  };
 
+  const handleCountdownComplete = ({ sessionId, roomCode }) => {
+    setShowBattleDialog(false);
     if (onNavigateBattle) {
       onNavigateBattle({ sessionId, roomCode, role: 'host' });
     }
@@ -84,6 +88,7 @@ function StartPage({ onNavigateBattle }) {
         <BattleDialog 
           onClose={handleCloseDialog}
           onStart={handleStartBattle}
+          onCountdownComplete={handleCountdownComplete}
         />
       )}
     </>

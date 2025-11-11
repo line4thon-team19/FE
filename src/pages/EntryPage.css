@@ -49,6 +49,13 @@
   margin-bottom: 1.5rem;
 }
 
+.entry-page__countdown {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #fd7811;
+  margin-top: 0.5rem;
+}
+
 .entry-page__players {
   font-size: 1rem;
   color: #333;

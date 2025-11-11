@@ -7,15 +7,22 @@ import { createBattleRoom } from '../services/battleApi';
 import { useBattleSocket } from '../hooks/useBattleSocket';
 import './BattleDialog.css';
 
-function BattleDialog({ onClose, onStart }) {
+function BattleDialog({ onClose, onStart, onCountdownComplete }) {
   const [inviteLink, setInviteLink] = useState('');
   const [sessionId, setSessionId] = useState('');
   const [roomCode, setRoomCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [canStart, setCanStart] = useState(true);
+  const [canStart, setCanStart] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
+  const [countdown, setCountdown] = useState(null);
 
-  const { remoteJoined } = useBattleSocket({ sessionId, roomCode });
+  const { remoteJoined } = useBattleSocket({
+    sessionId,
+    roomCode,
+    connectDelayMs: 500,
+    joinInitialDelayMs: 1500,
+  });
 
   // 배틀룸 생성
   useEffect(() => {
@@ -52,12 +59,33 @@ function BattleDialog({ onClose, onStart }) {
         setSessionId(session);
         setRoomCode(roomCode);
 
-        // 초대 링크에 sessionId와 roomCode 모두 포함
-        const baseUrl = window.location.origin;
-        const inviteLink = `${baseUrl}/join?sessionId=${encodeURIComponent(session)}&roomCode=${encodeURIComponent(roomCode)}`;
-        console.debug('[BattleDialog] inviteLink 생성', inviteLink);
-        setInviteLink(inviteLink);
-        setCanStart(true);
+        const providedInviteLink =
+          response?.inviteLink ??
+          response?.invite_link ??
+          room.inviteLink ??
+          room.invite_link ??
+          null;
+        let nextInviteLink = providedInviteLink;
+        if (!nextInviteLink) {
+          const baseUrl = window.location.origin;
+          nextInviteLink = `${baseUrl}/join/${encodeURIComponent(roomCode)}`;
+        }
+        try {
+          const parsed = new URL(nextInviteLink);
+          const normalized = `${window.location.origin}${parsed.pathname}${parsed.search}`;
+          console.debug('[BattleDialog] inviteLink origin 정상화', {
+            original: nextInviteLink,
+            normalized,
+          });
+          nextInviteLink = normalized;
+        } catch (parseError) {
+          console.debug('[BattleDialog] inviteLink URL 파싱 실패, 원본 사용', nextInviteLink);
+        }
+        console.debug('[BattleDialog] inviteLink 설정', nextInviteLink);
+        setInviteLink(nextInviteLink);
+        setCanStart(false);
+        setIsStarting(false);
+        setCountdown(null);
       } catch (error) {
         console.error('배틀룸 생성 실패:', error);
       } finally {
@@ -80,6 +108,23 @@ function BattleDialog({ onClose, onStart }) {
     console.debug('[BattleDialog] canStart changed', canStart);
   }, [canStart]);
 
+  useEffect(() => {
+    if (countdown === null) return;
+    if (countdown <= 0) {
+      setCountdown(null);
+      if (onCountdownComplete && sessionId && roomCode) {
+        onCountdownComplete({ sessionId, roomCode });
+      }
+      return;
+    }
+    const timerId = setTimeout(() => {
+      setCountdown((prev) => (prev === null ? null : prev - 1));
+    }, 1000);
+    return () => clearTimeout(timerId);
+  }, [countdown, onCountdownComplete, sessionId, roomCode]);
+
+  const isCountdownActive = countdown !== null;
+
   // 링크 복사
   const handleCopyLink = async () => {
     try {
@@ -91,15 +136,47 @@ function BattleDialog({ onClose, onStart }) {
   };
 
   // 시작하기 버튼 클릭
-  const handleStart = () => {
-    if (canStart && onStart) {
-      onStart({ sessionId, roomCode });
+  const handleStart = async () => {
+    if (!canStart || !onStart || !sessionId) return;
+    if (isStarting || isCountdownActive) return;
+    setIsStarting(true);
+    let shouldStartCountdown = false;
+    try {
+      const ok = await onStart({ sessionId, roomCode });
+      shouldStartCountdown = Boolean(ok);
+    } catch (error) {
+      console.error('[BattleDialog] 시작하기 실패', error);
+      shouldStartCountdown = false;
+    }
+    setIsStarting(false);
+    if (shouldStartCountdown) {
+      setCountdown(3);
     }
   };
 
+  const handleOverlayClick = () => {
+    if (isStarting || isCountdownActive) return;
+    if (onClose) onClose();
+  };
+
+  const handleDialogClick = (e) => {
+    e.stopPropagation();
+  };
+
+  const buttonDisabled = !canStart || !sessionId || isStarting || isCountdownActive;
+  const buttonLabel = (() => {
+    if (isCountdownActive) {
+      return `${countdown}`;
+    }
+    if (isStarting) {
+      return '시작 준비 중...';
+    }
+    return '시작하기';
+  })();
+
   return (
-    <div className="battle-dialog-overlay" onClick={onClose}>
-      <div className="battle-dialog" onClick={(e) => e.stopPropagation()}>
+    <div className="battle-dialog-overlay" onClick={handleOverlayClick}>
+      <div className="battle-dialog" onClick={handleDialogClick}>
         <div className="battle-dialog__content">
           <p className="battle-dialog__instruction">
             하단 링크를 친구에게 공유해 주세요!<br/>초대 후 시작하기 버튼을 눌러 게임을 시작해요!
@@ -149,12 +226,21 @@ function BattleDialog({ onClose, onStart }) {
           </div>
 
           <button
-            className={`battle-dialog__start-button ${canStart ? 'battle-dialog__start-button--active' : ''}`}
+            className={`battle-dialog__start-button ${
+              isCountdownActive
+                ? 'battle-dialog__start-button--countdown'
+                : canStart
+                  ? 'battle-dialog__start-button--active'
+                  : ''
+            }`}
             onClick={handleStart}
-            disabled={!canStart || !sessionId}
+            disabled={buttonDisabled}
           >
-            시작하기
+            {buttonLabel}
           </button>
+          {isCountdownActive && (
+            <p className="battle-dialog__countdown-hint">곧 게임 화면으로 이동합니다...</p>
+          )}
         </div>
       </div>
     </div>
