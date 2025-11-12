@@ -106,13 +106,15 @@ body {
     display: grid;
     grid-template-rows: auto auto auto 1fr auto;
     row-gap: 24px;
-    padding: 24px 48px 32px;
+    // padding: 24px 48px 32px; 왼쪽으로 밀리는거 이거 때문인거 같아서 주석처리 할께요!
     /* 여백 넉넉히 */
     background: #fff;
 }
 
 /* 상단 바 */
 .pg-top {
+    padding: 0 60px;
+    margin-top: 50px;
     display: grid;
     grid-template-columns: 1fr 576px 1fr;
     align-items: center;
@@ -243,6 +245,7 @@ body {
 }
 
 .pg-btn {
+    margin-bottom: 50px;
     width: 390px;
     height: 103px;
     border: none;
