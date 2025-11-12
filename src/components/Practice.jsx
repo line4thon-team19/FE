@@ -209,7 +209,10 @@ export default function PracticeGame({ onGoHome }) {
 
     return (
         <div className="pg-wrap">
-            <TopBar round={idx + 1} lionHistory={lionHistory} />
+            <TopBar
+                round={payload?.round?.current ?? lionHistory.length + 1}
+                lionHistory={lionHistory}
+            />
 
             <Timer secondsLeft={countdown > 0 ? 0 : Math.max(0, secondsLeft)} />
 
