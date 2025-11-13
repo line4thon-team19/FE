@@ -226,13 +226,7 @@ function BattleDialog({ onClose, onStart, onCountdownComplete }) {
           </div>
 
           <button
-            className={`battle-dialog__start-button ${
-              isCountdownActive
-                ? 'battle-dialog__start-button--countdown'
-                : canStart
-                  ? 'battle-dialog__start-button--countdown'
-                  : ''
-            }`}
+            className="battle-dialog__start-button"
             onClick={handleStart}
             disabled={buttonDisabled}
           >

@@ -32,6 +32,7 @@ function deriveAnswerEntry(source = {}) {
 const MAX_BADGES = 5;
 const ROUND_DURATION_SEC = 30;
 const DEFAULT_PLACEHOLDER = '(내용 없음)';
+const TTS_ENDPOINT = 'https://zyxjbccowxzomkmgqrie.supabase.co/functions/v1/tts';
 
 function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
   const [inputValue, setInputValue] = useState('');
@@ -39,14 +40,18 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
   const [opponentAnswers, setOpponentAnswers] = useState([]);
   const [hasJoined, setHasJoined] = useState(false);
   const [badgeStates, setBadgeStates] = useState(Array(MAX_BADGES).fill('empty'));
-  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isAudioPlaying, setIsAudioPlaying] = useState(false);
   const pendingAnswersRef = useRef({});
   const latestTypingRef = useRef({});
   const inputRef = useRef(null);
   const isComposingRef = useRef(false);
   const previousRoundRef = useRef(null);
-  const lastSpokenKeyRef = useRef(null);
   const [preloadedQuestions, setPreloadedQuestions] = useState([]);
+  const audioRef = useRef(null);
+  const speakTimeoutRef = useRef(null);
+  const [ttsAudioUrl, setTtsAudioUrl] = useState(null);
+  const [ttsLoading, setTtsLoading] = useState(false);
+  const [ttsError, setTtsError] = useState(null);
 
   const connectDelayMs = role === 'host' ? 500 : 0;
   const joinInitialDelayMs = role === 'host' ? 1500 : 600;
@@ -83,15 +88,6 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
     return { next, roundResults };
   }, [sessionId, playerId]);
 
-  const speechSupported = useMemo(
-    () => typeof window !== 'undefined' && typeof window.speechSynthesis !== 'undefined',
-    [],
-  );
-  const voicesRef = useRef([]);
-  const speechUtteranceRef = useRef(null);
-  const [voicesReady, setVoicesReady] = useState(false);
-  const [speechError, setSpeechError] = useState(null);
-  const pendingSpeakRef = useRef(null);
   useEffect(() => {
     if (!sessionId) return;
     try {
@@ -153,177 +149,155 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
     return `${ratio * 100}%`;
   }, [remainingSec]);
 
-  const speakQuestion = useCallback(
-    (force = false) => {
-      console.log('[BattleRoomPage:TTS] speakQuestion 호출', {
-        force,
-        speechSupported,
-        questionKey,
-        questionSpeechText,
-        voicesReady,
-        voicesCount: voicesRef.current.length,
+  useEffect(() => {
+    let isActive = true;
+    if (!questionSpeechText) {
+      setTtsError(null);
+      setTtsAudioUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
       });
-      if (!speechSupported) {
-        setSpeechError(new Error('현재 브라우저에서 음성 합성을 사용할 수 없습니다.'));
-        return false;
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = '';
+        audioRef.current = null;
       }
-      if (!questionKey || !questionSpeechText) {
-        setSpeechError(new Error('읽을 문장이 없습니다.'));
-        return false;
-      }
-      if (!force && lastSpokenKeyRef.current === questionKey) {
-        return false;
-      }
+      return;
+    }
+
+    const controller = new AbortController();
+    setTtsLoading(true);
+    setTtsError(null);
+
+    const fetchTts = async () => {
       try {
-        const synth = window.speechSynthesis;
-        const isBusy = synth.speaking || synth.pending;
-        if (isBusy) {
-          if (!force) {
-            console.log('[BattleRoomPage:TTS] 재생 중, 새 요청 무시', { questionKey });
-            return false;
-          }
-          pendingSpeakRef.current = {
-            key: questionKey,
-            text: questionSpeechText,
-            ts: Date.now(),
-          };
-          synth.cancel();
-          console.log('[BattleRoomPage:TTS] 기존 음성 재생 취소 (재시도 예정)', pendingSpeakRef.current);
-          return false;
+        const response = await fetch(TTS_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: questionSpeechText }),
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          throw new Error('TTS 생성 요청이 실패했습니다.');
         }
-        const UtteranceCtor =
-          (typeof window !== 'undefined' && typeof window.SpeechSynthesisUtterance === 'function'
-            ? window.SpeechSynthesisUtterance
-            : undefined) ??
-          (typeof SpeechSynthesisUtterance !== 'undefined' ? SpeechSynthesisUtterance : undefined);
-        if (!UtteranceCtor) {
-          setSpeechError(new Error('음성 합성 객체를 생성할 수 없습니다.'));
-          console.error('[BattleRoomPage:TTS] SpeechSynthesisUtterance 생성 불가');
-          return false;
+        const data = await response.json();
+        if (!data?.audio) {
+          throw new Error('TTS 오디오 데이터가 없습니다.');
         }
-        const utterance = new UtteranceCtor(questionSpeechText);
-        const hasKorean = /[가-힣]/.test(questionSpeechText);
-        const preferredVoice =
-          voicesRef.current.find((voice) =>
-            voice.lang?.toLowerCase().startsWith(hasKorean ? 'ko' : 'en'),
-          ) ??
-          voicesRef.current.find((voice) =>
-            voice.lang?.toLowerCase().includes(hasKorean ? 'ko' : 'en'),
-          ) ??
-          voicesRef.current[0] ??
-          null;
-        if (preferredVoice) {
-          utterance.voice = preferredVoice;
-          utterance.lang = preferredVoice.lang;
-        } else {
-          utterance.lang = hasKorean ? 'ko-KR' : 'en-US';
-        }
-        utterance.rate = 1;
-        utterance.pitch = 1;
-        utterance.volume = 1;
-        utterance.onstart = () => {
-          setIsSpeaking(true);
-          setSpeechError(null);
-          console.log('[BattleRoomPage:TTS] 음성 재생 시작', { questionKey });
-        };
-        utterance.onend = () => {
-          setIsSpeaking(false);
-          if (speechUtteranceRef.current === utterance) {
-            speechUtteranceRef.current = null;
-          }
-          console.log('[BattleRoomPage:TTS] 음성 재생 종료', { questionKey });
-          const pending = pendingSpeakRef.current;
-          if (pending && pending.key === questionKey) {
-            pendingSpeakRef.current = null;
-            console.log('[BattleRoomPage:TTS] 취소 후 재시도 실행', pending);
-            setTimeout(() => {
-              speakQuestion(true);
-            }, 100);
-          }
-        };
-        utterance.onerror = (event) => {
-          setIsSpeaking(false);
-          if (event?.error === 'canceled') {
-            console.warn('[BattleRoomPage:TTS] 음성 재생이 취소되었습니다.', { questionKey });
-            lastSpokenKeyRef.current = null;
-            const pending = pendingSpeakRef.current;
-            if (pending && pending.key === questionKey) {
-              pendingSpeakRef.current = null;
-              console.log('[BattleRoomPage:TTS] 취소 오류 후 재시도 실행', pending);
-              setTimeout(() => {
-                speakQuestion(true);
-              }, 120);
-            }
-          } else {
-            setSpeechError(new Error(event?.error || '음성 재생 중 오류가 발생했습니다.'));
-          }
-          if (speechUtteranceRef.current === utterance) {
-            speechUtteranceRef.current = null;
-          }
-          console.error('[BattleRoomPage:TTS] 음성 재생 오류', { questionKey, event });
-        };
-        speechUtteranceRef.current = utterance;
-        lastSpokenKeyRef.current = questionKey;
-        synth.resume();
-        synth.speak(utterance);
-        console.log('[BattleRoomPage:TTS] speechSynthesis.speak 호출 완료', { questionKey });
-        return true;
+        const audioResponse = await fetch(`data:audio/mp3;base64,${data.audio}`);
+        const blob = await audioResponse.blob();
+        if (!isActive) return;
+        const objectUrl = URL.createObjectURL(blob);
+        setTtsAudioUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return objectUrl;
+        });
       } catch (error) {
-        setIsSpeaking(false);
-        setSpeechError(error instanceof Error ? error : new Error('음성 합성 실패'));
-        console.error('[BattleRoomPage:TTS] 음성 합성 예외', error);
-        return false;
+        if (!isActive || error.name === 'AbortError') return;
+        setTtsAudioUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return null;
+        });
+        setTtsError(
+          error instanceof Error ? error : new Error('TTS 변환 중 오류가 발생했습니다.'),
+        );
+      } finally {
+        if (isActive) {
+          setTtsLoading(false);
+        }
       }
-    },
-    [speechSupported, questionKey, questionSpeechText, voicesReady],
-  );
-
-  useEffect(() => {
-    if (!speechSupported) return;
-    const synth = window.speechSynthesis;
-    const handleVoices = () => {
-      const voices = synth.getVoices() ?? [];
-      voicesRef.current = voices;
-      setVoicesReady(voices.length > 0);
-      console.log('[BattleRoomPage:TTS] voice 목록 로드', { count: voices.length });
     };
-    handleVoices();
-    synth.addEventListener('voiceschanged', handleVoices);
+
+    fetchTts();
+
     return () => {
-      synth.removeEventListener('voiceschanged', handleVoices);
+      isActive = false;
+      controller.abort();
     };
-  }, [speechSupported]);
+  }, [questionKey, questionSpeechText]);
 
   useEffect(() => {
-    if (!speechSupported) return;
-    if (!questionKey || !questionSpeechText) {
-      setIsSpeaking(false);
-      lastSpokenKeyRef.current = null;
-      console.log('[BattleRoomPage:TTS] 자동 재생 취소 - 질문 없음', {
-        questionKey,
-        questionSpeechText,
-      });
+    if (speakTimeoutRef.current) {
+      clearTimeout(speakTimeoutRef.current);
+      speakTimeoutRef.current = null;
+    }
+    if (!ttsAudioUrl) {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = '';
+        audioRef.current = null;
+      }
+      setIsAudioPlaying(false);
       return;
     }
-    if (!voicesReady) {
-      console.log('[BattleRoomPage:TTS] 자동 재생 대기 - 음성 목록 준비 중');
+
+    const audio = new Audio(ttsAudioUrl);
+    audioRef.current = audio;
+
+    const handlePlay = () => {
+      setIsAudioPlaying(true);
+      setTtsError(null);
+    };
+    const handleEnd = () => setIsAudioPlaying(false);
+    const handlePause = () => setIsAudioPlaying(false);
+
+    audio.addEventListener('play', handlePlay);
+    audio.addEventListener('ended', handleEnd);
+    audio.addEventListener('pause', handlePause);
+
+    speakTimeoutRef.current = setTimeout(() => {
+      audio
+        .play()
+        .catch(() => {
+          setTtsError(
+            new Error('브라우저에서 자동 재생이 차단되었습니다. 스피커 버튼을 눌러 주세요.'),
+          );
+        });
+    }, 200);
+
+    return () => {
+      if (speakTimeoutRef.current) {
+        clearTimeout(speakTimeoutRef.current);
+        speakTimeoutRef.current = null;
+      }
+      audio.pause();
+      audio.removeEventListener('play', handlePlay);
+      audio.removeEventListener('ended', handleEnd);
+      audio.removeEventListener('pause', handlePause);
+      if (audioRef.current === audio) {
+        audioRef.current = null;
+      }
+      URL.revokeObjectURL(ttsAudioUrl);
+    };
+  }, [ttsAudioUrl]);
+
+  const handlePlayButtonClick = useCallback(() => {
+    if (!audioRef.current) {
+      setTtsError(new Error('음성이 아직 준비되지 않았습니다. 잠시 후 다시 시도해 주세요.'));
       return;
     }
-    console.log('[BattleRoomPage:TTS] 자동 재생 시도', { questionKey });
-    speakQuestion(false);
-  }, [speechSupported, voicesReady, questionKey, questionSpeechText, speakQuestion]);
+    audioRef.current.currentTime = 0;
+    audioRef.current.play().catch(() => {
+      setTtsError(new Error('브라우저에서 음성 재생이 차단되었습니다. 다시 시도해 주세요.'));
+    });
+  }, []);
 
   useEffect(() => {
     return () => {
-      if (!speechSupported) return;
-      const synth = window.speechSynthesis;
-      if (synth.speaking) {
-        synth.cancel();
+      if (speakTimeoutRef.current) {
+        clearTimeout(speakTimeoutRef.current);
+        speakTimeoutRef.current = null;
       }
-      speechUtteranceRef.current = null;
-      lastSpokenKeyRef.current = null;
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = '';
+        audioRef.current = null;
+      }
+      if (ttsAudioUrl) {
+        URL.revokeObjectURL(ttsAudioUrl);
+      }
     };
-  }, [speechSupported]);
+  }, [ttsAudioUrl]);
 
   useEffect(() => {
     if (!typingSnapshot?.playerId) return;
@@ -538,24 +512,25 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
         </div>
 
         <section className="battle-room__question">
-          {speechSupported ? (
-            <button
-              type="button"
-              className={`battle-room__question-audio${
-                isSpeaking ? ' battle-room__question-audio--speaking' : ''
-              }`}
-              onClick={() => {
-                speakQuestion(true);
-              }}
-              aria-label={questionAriaLabel}
-            >
-              <img src={audioIcon} alt="" className="battle-room__question-audio-icon" aria-hidden />
-            </button>
-          ) : (
+          <button
+            type="button"
+            className={`battle-room__question-audio${
+              isAudioPlaying ? ' battle-room__question-audio--speaking' : ''
+            }`}
+            onClick={handlePlayButtonClick}
+            aria-label={questionAriaLabel}
+            disabled={ttsLoading || !ttsAudioUrl}
+          >
+            <img src={audioIcon} alt="" className="battle-room__question-audio-icon" aria-hidden />
+          </button>
+          {ttsLoading ? (
+            <span className="battle-room__question-audio-hint">음성을 준비하는 중...</span>
+          ) : null}
+          {ttsError ? (
             <span className="battle-room__question-audio-hint battle-room__question-audio-hint--error">
-              현재 브라우저에서는 음성 합성을 사용할 수 없습니다.
+              {ttsError.message}
             </span>
-          )}
+          ) : null}
         </section>
         <section className="battle-room__board-title-container">
           <div className="battle-room__board-title">
