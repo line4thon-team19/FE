@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useBattleSocket } from '../hooks/useBattleSocket';
 import { useBattleTts } from '../hooks/useBattleTts';
 import { getBattleSession } from '../services/battleApi';
@@ -36,6 +37,7 @@ const DEFAULT_PLACEHOLDER = '(내용 없음)';
 const TTS_ENDPOINT = 'https://zyxjbccowxzomkmgqrie.supabase.co/functions/v1/tts';
 
 function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
+  const navigate = useNavigate();
   const [inputValue, setInputValue] = useState('');
   const [myAnswers, setMyAnswers] = useState([]);
   const [opponentAnswers, setOpponentAnswers] = useState([]);
@@ -47,6 +49,7 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
   const isComposingRef = useRef(false);
   const previousRoundRef = useRef(null);
   const [preloadedQuestions, setPreloadedQuestions] = useState([]);
+  const hasNavigatedResultRef = useRef(false);
 
   const connectDelayMs = role === 'host' ? 500 : 0;
   const joinInitialDelayMs = role === 'host' ? 1500 : 600;
@@ -62,6 +65,16 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
     submitAnswer,
     playerId,
   } = useBattleSocket({ sessionId, roomCode, connectDelayMs, joinInitialDelayMs });
+  useEffect(() => {
+    if (hasNavigatedResultRef.current) return;
+    if (roundEndEvent?.state !== 'ENDED' || !sessionId) return;
+    hasNavigatedResultRef.current = true;
+    const timerId = setTimeout(() => {
+      navigate(`/result/battle/${sessionId}`);
+    }, 1500);
+    return () => clearTimeout(timerId);
+  }, [roundEndEvent, navigate, sessionId]);
+
 
   const loadBadgeStates = useCallback(async () => {
     if (!sessionId || !playerId) return null;

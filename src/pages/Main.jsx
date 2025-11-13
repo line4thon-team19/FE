@@ -1,13 +1,17 @@
-import React from 'react'
+import React from 'react';
 import axios from 'axios';
-import lion_icon from '../assets/lion.svg'
+import lion_icon from '../assets/lion.svg';
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import BattleDialog from '../components/BattleDialog';
+import { createGuestPlayer, startBattleRoom } from '../services/battleApi';
 
 const HEALTH_API_URL= 'https://hyunseoko.store/api/health';
 const GUEST_API_URL = 'https://hyunseoko.store/api/guest';
 
 const Main = () => { 
+  const navigate = useNavigate();
+
   // GET api 관련 상태
   const [healthLoading, setHealthLoading] = useState(false); 
   const [healthData, setHealthData] = useState(null); 
@@ -16,7 +20,10 @@ const Main = () => {
   //POST api 관련 상태
   const [guestLoading, setGuestLoading] = useState(false);
   const [guestData, setGuestData] = useState(null); 
-  const [guestError, setGuestError] = useState(null); 
+  const [guestError, setGuestError] = useState(null);
+  const [showBattleDialog, setShowBattleDialog] = useState(false);
+  const [isBattleLoading, setIsBattleLoading] = useState(false);
+  const [battleError, setBattleError] = useState(null);
 
   const [isGuestTokenReady, setIsGuestTokenReady] = useState(false);
 
@@ -76,10 +83,60 @@ const Main = () => {
     registerGuest();
   }, []);
 
-  const isButtonDisabled = guestLoading || !isGuestTokenReady;
+  const handleBattle = async () => {
+    if (isBattleLoading) return;
+    setBattleError(null);
+    setIsBattleLoading(true);
+    try {
+      const response = await createGuestPlayer();
+      const guestToken = response?.guestToken ?? response?.token ?? null;
+      if (guestToken) {
+        localStorage.setItem('authToken', guestToken);
+      }
+      setIsGuestTokenReady(true);
+      setShowBattleDialog(true);
+    } catch (error) {
+      console.error('게스트 생성 실패:', error);
+      setBattleError('배틀 준비 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+    } finally {
+      setIsBattleLoading(false);
+    }
+  };
+
+  const handleCloseDialog = () => {
+    setShowBattleDialog(false);
+  };
+
+  const handleStartBattle = async ({ sessionId, roomCode }) => {
+    if (!sessionId) return false;
+    try {
+      const response = await startBattleRoom(sessionId, { countdownSec: 3 });
+      if (response?.questions && Array.isArray(response.questions)) {
+        try {
+          sessionStorage.setItem(
+            `battleQuestions:${sessionId}`,
+            JSON.stringify(response.questions),
+          );
+        } catch (storageError) {
+          console.warn('[Main] battleQuestions 저장 실패', storageError);
+        }
+      }
+      return true;
+    } catch (error) {
+      console.log('[Main] 배틀 시작 API 실패', error);
+      return false;
+    }
+  };
+
+  const handleCountdownComplete = ({ sessionId, roomCode }) => {
+    setShowBattleDialog(false);
+    navigate(`/battle/${sessionId}`, { state: { roomCode, role: 'host' } });
+  };
+
+  const isButtonDisabled = guestLoading || !isGuestTokenReady || isBattleLoading;
 
   return (
-    <div id="Main_wrap">
+    <>
       <div id="Main_wrap">
       <div className="title">
         <img src={lion_icon} alt="" />
@@ -95,12 +152,23 @@ const Main = () => {
             연습하기
           </button>
         </Link>
-        <button className="battle_btn">
+        <button 
+          className="battle_btn"
+          onClick={handleBattle}
+          disabled={isButtonDisabled}
+        >
           배틀하기
         </button>
       </div>
     </div>
-    </div>
+      {showBattleDialog && (
+        <BattleDialog 
+          onClose={handleCloseDialog}
+          onStart={handleStartBattle}
+          onCountdownComplete={handleCountdownComplete}
+        />
+      )}
+    </>
   )
 }
 

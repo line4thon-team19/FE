@@ -7,6 +7,167 @@ import right_icon from '../assets/right.svg';
 import left_icon from '../assets/left.svg'
 
 const BASE_URL_DOMAIN = 'https://hyunseoko.store';
+const DEFAULT_USER_INPUT = '입력 없음';
+
+const normalizeResultFlag = (value) => {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  return value.trim().toLowerCase();
+};
+
+const pickFirstNonEmptyString = (source, keys = []) => {
+  if (!source) return null;
+  for (const key of keys) {
+    if (!Object.prototype.hasOwnProperty.call(source, key)) continue;
+    const value = source[key];
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return null;
+};
+
+const pickStringFromArray = (maybeArray) => {
+  if (!Array.isArray(maybeArray)) return null;
+  for (const entry of maybeArray) {
+    if (typeof entry === 'string' && entry.trim().length > 0) {
+      return entry.trim();
+    }
+  }
+  return null;
+};
+
+const resolveExplanation = (roundDetail) => {
+  const explanation =
+    pickFirstNonEmptyString(roundDetail, ['explanation', 'standardRule', 'rule', 'reason']) ??
+    pickFirstNonEmptyString(roundDetail?.question, ['explanation', 'standardRule', 'rule', 'reason']);
+  return explanation || '';
+};
+
+const resolveCorrectAnswer = (roundDetail) => {
+  const correctAnswer =
+    pickFirstNonEmptyString(roundDetail, ['correctAnswer', 'correctText', 'correct']) ??
+    pickFirstNonEmptyString(roundDetail?.question, [
+      'correctAnswer',
+      'correctText',
+      'answerText',
+      'answer',
+      'text',
+    ]) ??
+    pickStringFromArray(roundDetail?.correctAnswers) ??
+    pickStringFromArray(roundDetail?.question?.answers);
+  return correctAnswer || '';
+};
+
+const derivePracticeAnswerInfo = (roundDetail) => {
+  const text =
+    pickFirstNonEmptyString(roundDetail, [
+      'answerText',
+      'answer',
+      'userAnswer',
+      'submittedAnswer',
+      'input',
+    ]) ??
+    pickStringFromArray(roundDetail?.answers) ??
+    DEFAULT_USER_INPUT;
+
+  if (typeof roundDetail?.isCorrect === 'boolean') {
+    return { text, isCorrect: roundDetail.isCorrect };
+  }
+
+  const normalizedResult = normalizeResultFlag(roundDetail?.result ?? roundDetail?.status);
+
+  if (normalizedResult) {
+    if (['correct', 'pass', 'success', 'right', 'win'].includes(normalizedResult)) {
+      return { text, isCorrect: true };
+    }
+    if (['wrong', 'fail', 'incorrect', 'lose'].includes(normalizedResult)) {
+      return { text, isCorrect: false };
+    }
+  }
+
+  return { text, isCorrect: false };
+};
+
+const selectBattlePlayerEntry = (roundDetail, playerId) => {
+  const players = Array.isArray(roundDetail?.players) ? roundDetail.players : [];
+  if (players.length === 0) {
+    return null;
+  }
+  if (playerId) {
+    const matched =
+      players.find(
+        (player) =>
+          player?.playerId === playerId ||
+          player?.id === playerId ||
+          player?.guestId === playerId ||
+          player?.userId === playerId,
+      ) ?? null;
+    if (matched) {
+      return matched;
+    }
+  }
+  const hostCandidate = players.find((player) => player?.isHost) ?? null;
+  if (hostCandidate) {
+    return hostCandidate;
+  }
+  return players[0];
+};
+
+const deriveBattleAnswerInfo = (roundDetail, playerId) => {
+  const playerEntry = selectBattlePlayerEntry(roundDetail, playerId) ?? {};
+  const text =
+    pickFirstNonEmptyString(playerEntry, [
+      'submittedText',
+      'answerText',
+      'answer',
+      'userAnswer',
+      'input',
+      'value',
+      'content',
+    ]) ??
+    pickFirstNonEmptyString(roundDetail, [
+      'submittedText',
+      'answerText',
+      'answer',
+      'userAnswer',
+      'input',
+    ]) ??
+    pickStringFromArray(playerEntry?.answers) ??
+    pickStringFromArray(roundDetail?.answers) ??
+    DEFAULT_USER_INPUT;
+
+  if (typeof playerEntry?.isCorrect === 'boolean') {
+    return { text, isCorrect: playerEntry.isCorrect };
+  }
+
+  const normalizedPlayerResult = normalizeResultFlag(playerEntry?.result ?? playerEntry?.status);
+  if (normalizedPlayerResult) {
+    if (['correct', 'pass', 'success', 'right', 'win'].includes(normalizedPlayerResult)) {
+      return { text, isCorrect: true };
+    }
+    if (['wrong', 'fail', 'incorrect', 'lose'].includes(normalizedPlayerResult)) {
+      return { text, isCorrect: false };
+    }
+  }
+
+  if (typeof roundDetail?.isCorrect === 'boolean') {
+    return { text, isCorrect: roundDetail.isCorrect };
+  }
+
+  const normalizedRoundResult = normalizeResultFlag(roundDetail?.result ?? roundDetail?.status);
+  if (normalizedRoundResult) {
+    if (['correct', 'pass', 'success', 'right', 'win'].includes(normalizedRoundResult)) {
+      return { text, isCorrect: true };
+    }
+    if (['wrong', 'fail', 'incorrect', 'lose'].includes(normalizedRoundResult)) {
+      return { text, isCorrect: false };
+    }
+  }
+
+  return { text, isCorrect: false };
+};
 
 const loadKakaoSDK = (appKey) => {
   // SDK가 이미 초기화되었는지 확인
@@ -159,6 +320,16 @@ const Result = () => {
 
   const currentRoundDetail = roundDetails[currentRoundIndex];
 
+  const localPlayerId =
+    typeof window !== 'undefined' ? sessionStorage.getItem('guestPlayerId') ?? null : null;
+
+  const { text: userInput, isCorrect } = isPracticeMode
+    ? derivePracticeAnswerInfo(currentRoundDetail)
+    : deriveBattleAnswerInfo(currentRoundDetail, localPlayerId);
+
+  const correctAnswer = resolveCorrectAnswer(currentRoundDetail);
+  const standardRule = resolveExplanation(currentRoundDetail);
+
   if (!currentRoundDetail) {
     return <div id="Result_wrap">결과에 라운드 상세 정보가 없습니다.</div>;
   }
@@ -189,12 +360,17 @@ const Result = () => {
 
   const currentData = gameData[finalStatus] || gameData.practice;
 
+  const resolvedRoundNumber =
+    typeof currentRoundDetail.round === 'number' && currentRoundDetail.round > 0
+      ? currentRoundDetail.round
+      : currentRoundIndex + 1;
+
   const roundData = {
-    round: `ROUND ${currentRoundDetail.round}`,
-    userInput: currentRoundDetail.answer || '입력 없음',
-    isCorrect: currentRoundDetail.result === 'correct',
-    correctAnswer: currentRoundDetail.correctAnswer,
-    standardRule: currentRoundDetail.explanation,
+    round: `ROUND ${resolvedRoundNumber}`,
+    userInput,
+    isCorrect,
+    correctAnswer,
+    standardRule,
   };
 
   const handleRoundChange = (direction) => {
