@@ -473,7 +473,6 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
           <div className="battle-room__board-title">
             <img src={winLion} alt="" className="battle-room__board-title-icon" aria-hidden />
             나
-            {myRoundWins > 0 && <span className="battle-room__win-count">+{myRoundWins}</span>}
           </div>
           <div className="battle-room__board-title">
             <img src={winLion} alt="" className="battle-room__board-title-icon" aria-hidden />
