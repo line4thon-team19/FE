@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useBattleSocket } from '../hooks/useBattleSocket';
+import { useBattleTts } from '../hooks/useBattleTts';
 import { getBattleSession } from '../services/battleApi';
 import winLion from '../assets/win_lion.svg';
 import cryLion from '../assets/cry_lion.svg';
@@ -40,18 +41,12 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
   const [opponentAnswers, setOpponentAnswers] = useState([]);
   const [hasJoined, setHasJoined] = useState(false);
   const [badgeStates, setBadgeStates] = useState(Array(MAX_BADGES).fill('empty'));
-  const [isAudioPlaying, setIsAudioPlaying] = useState(false);
   const pendingAnswersRef = useRef({});
   const latestTypingRef = useRef({});
   const inputRef = useRef(null);
   const isComposingRef = useRef(false);
   const previousRoundRef = useRef(null);
   const [preloadedQuestions, setPreloadedQuestions] = useState([]);
-  const audioRef = useRef(null);
-  const speakTimeoutRef = useRef(null);
-  const [ttsAudioUrl, setTtsAudioUrl] = useState(null);
-  const [ttsLoading, setTtsLoading] = useState(false);
-  const [ttsError, setTtsError] = useState(null);
 
   const connectDelayMs = role === 'host' ? 500 : 0;
   const joinInitialDelayMs = role === 'host' ? 1500 : 600;
@@ -137,6 +132,18 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
     return `${baseId}::${questionSpeechText}`;
   }, [questionIdentifier, questionSpeechText, roundInfo?.current]);
 
+  const {
+    play: playTtsAudio,
+    isPlaying: isAudioPlaying,
+    isLoading: ttsLoading,
+    error: ttsError,
+    hasAudio: hasTtsAudio,
+  } = useBattleTts({
+    questionKey,
+    questionText: questionSpeechText,
+    endpoint: TTS_ENDPOINT,
+  });
+
   const opponentTypingText = useMemo(() => {
     if (!typingSnapshot || typingSnapshot.playerId === playerId) return '';
     const raw = typingSnapshot.preview ?? typingSnapshot.text ?? typingSnapshot.answerText ?? '';
@@ -149,155 +156,6 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
     return `${ratio * 100}%`;
   }, [remainingSec]);
 
-  useEffect(() => {
-    let isActive = true;
-    if (!questionSpeechText) {
-      setTtsError(null);
-      setTtsAudioUrl((prev) => {
-        if (prev) URL.revokeObjectURL(prev);
-        return null;
-      });
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.src = '';
-        audioRef.current = null;
-      }
-      return;
-    }
-
-    const controller = new AbortController();
-    setTtsLoading(true);
-    setTtsError(null);
-
-    const fetchTts = async () => {
-      try {
-        const response = await fetch(TTS_ENDPOINT, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: questionSpeechText }),
-          signal: controller.signal,
-        });
-        if (!response.ok) {
-          throw new Error('TTS 생성 요청이 실패했습니다.');
-        }
-        const data = await response.json();
-        if (!data?.audio) {
-          throw new Error('TTS 오디오 데이터가 없습니다.');
-        }
-        const audioResponse = await fetch(`data:audio/mp3;base64,${data.audio}`);
-        const blob = await audioResponse.blob();
-        if (!isActive) return;
-        const objectUrl = URL.createObjectURL(blob);
-        setTtsAudioUrl((prev) => {
-          if (prev) URL.revokeObjectURL(prev);
-          return objectUrl;
-        });
-      } catch (error) {
-        if (!isActive || error.name === 'AbortError') return;
-        setTtsAudioUrl((prev) => {
-          if (prev) URL.revokeObjectURL(prev);
-          return null;
-        });
-        setTtsError(
-          error instanceof Error ? error : new Error('TTS 변환 중 오류가 발생했습니다.'),
-        );
-      } finally {
-        if (isActive) {
-          setTtsLoading(false);
-        }
-      }
-    };
-
-    fetchTts();
-
-    return () => {
-      isActive = false;
-      controller.abort();
-    };
-  }, [questionKey, questionSpeechText]);
-
-  useEffect(() => {
-    if (speakTimeoutRef.current) {
-      clearTimeout(speakTimeoutRef.current);
-      speakTimeoutRef.current = null;
-    }
-    if (!ttsAudioUrl) {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.src = '';
-        audioRef.current = null;
-      }
-      setIsAudioPlaying(false);
-      return;
-    }
-
-    const audio = new Audio(ttsAudioUrl);
-    audioRef.current = audio;
-
-    const handlePlay = () => {
-      setIsAudioPlaying(true);
-      setTtsError(null);
-    };
-    const handleEnd = () => setIsAudioPlaying(false);
-    const handlePause = () => setIsAudioPlaying(false);
-
-    audio.addEventListener('play', handlePlay);
-    audio.addEventListener('ended', handleEnd);
-    audio.addEventListener('pause', handlePause);
-
-    speakTimeoutRef.current = setTimeout(() => {
-      audio
-        .play()
-        .catch(() => {
-          setTtsError(
-            new Error('브라우저에서 자동 재생이 차단되었습니다. 스피커 버튼을 눌러 주세요.'),
-          );
-        });
-    }, 200);
-
-    return () => {
-      if (speakTimeoutRef.current) {
-        clearTimeout(speakTimeoutRef.current);
-        speakTimeoutRef.current = null;
-      }
-      audio.pause();
-      audio.removeEventListener('play', handlePlay);
-      audio.removeEventListener('ended', handleEnd);
-      audio.removeEventListener('pause', handlePause);
-      if (audioRef.current === audio) {
-        audioRef.current = null;
-      }
-      URL.revokeObjectURL(ttsAudioUrl);
-    };
-  }, [ttsAudioUrl]);
-
-  const handlePlayButtonClick = useCallback(() => {
-    if (!audioRef.current) {
-      setTtsError(new Error('음성이 아직 준비되지 않았습니다. 잠시 후 다시 시도해 주세요.'));
-      return;
-    }
-    audioRef.current.currentTime = 0;
-    audioRef.current.play().catch(() => {
-      setTtsError(new Error('브라우저에서 음성 재생이 차단되었습니다. 다시 시도해 주세요.'));
-    });
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (speakTimeoutRef.current) {
-        clearTimeout(speakTimeoutRef.current);
-        speakTimeoutRef.current = null;
-      }
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.src = '';
-        audioRef.current = null;
-      }
-      if (ttsAudioUrl) {
-        URL.revokeObjectURL(ttsAudioUrl);
-      }
-    };
-  }, [ttsAudioUrl]);
 
   useEffect(() => {
     if (!typingSnapshot?.playerId) return;
@@ -517,9 +375,9 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
             className={`battle-room__question-audio${
               isAudioPlaying ? ' battle-room__question-audio--speaking' : ''
             }`}
-            onClick={handlePlayButtonClick}
+            onClick={playTtsAudio}
             aria-label={questionAriaLabel}
-            disabled={ttsLoading || !ttsAudioUrl}
+            disabled={ttsLoading || !hasTtsAudio}
           >
             <img src={audioIcon} alt="" className="battle-room__question-audio-icon" aria-hidden />
           </button>
