@@ -36,6 +36,54 @@ const ROUND_DURATION_SEC = 30;
 const DEFAULT_PLACEHOLDER = '(내용 없음)';
 const TTS_ENDPOINT = 'https://zyxjbccowxzomkmgqrie.supabase.co/functions/v1/tts';
 
+function persistBattleAnswer(sessionId, round, payload = {}) {
+  if (!sessionId || typeof round !== 'number' || Number.isNaN(round)) return;
+  const normalizedRound = Number.isFinite(round) ? Math.max(1, Math.floor(round)) : null;
+  if (!normalizedRound) return;
+  if (typeof window === 'undefined') return;
+  try {
+    const storageKey = `battleAnswers:${sessionId}`;
+    const raw = sessionStorage.getItem(storageKey);
+    const parsed = raw ? JSON.parse(raw) : {};
+    const key = String(normalizedRound);
+    const normalizedPayload =
+      typeof payload === 'object' && payload !== null
+        ? payload
+        : { text: typeof payload === 'string' ? payload : undefined };
+
+    const previousEntry = parsed[key];
+    const baseEntry =
+      previousEntry && typeof previousEntry === 'object'
+        ? previousEntry
+        : typeof previousEntry === 'string'
+          ? { text: previousEntry, isCorrect: null }
+          : {};
+
+    const nextEntry = { ...baseEntry };
+
+    if (typeof normalizedPayload.text === 'string') {
+      nextEntry.text = normalizedPayload.text;
+    }
+    if (typeof normalizedPayload.isCorrect === 'boolean') {
+      nextEntry.isCorrect = normalizedPayload.isCorrect;
+    } else if (
+      normalizedPayload.isCorrect === null &&
+      !Object.prototype.hasOwnProperty.call(nextEntry, 'isCorrect')
+    ) {
+      nextEntry.isCorrect = null;
+    }
+
+    if (Object.keys(nextEntry).length === 0) {
+      return;
+    }
+
+    parsed[key] = nextEntry;
+    sessionStorage.setItem(storageKey, JSON.stringify(parsed));
+  } catch (error) {
+    console.warn('[BattleRoomPage] battle answer 저장 실패', error);
+  }
+}
+
 function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
   const navigate = useNavigate();
   const [inputValue, setInputValue] = useState('');
@@ -198,6 +246,23 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
     delete pendingAnswersRef.current[entryKey];
     const isMine = answerJudged.playerId === playerId;
     const targetSetter = isMine ? setMyAnswers : setOpponentAnswers;
+    const roundNumber =
+      typeof answerJudged.round === 'number'
+        ? answerJudged.round
+        : typeof roundInfo?.current === 'number'
+          ? roundInfo.current
+          : null;
+    if (
+      isMine &&
+      roundNumber !== null &&
+      entry.text &&
+      entry.text !== DEFAULT_PLACEHOLDER
+    ) {
+      persistBattleAnswer(sessionId, roundNumber, {
+        text: entry.text,
+        isCorrect: entry.isCorrect,
+      });
+    }
     targetSetter((prev) => {
       const next = [...prev, { ...entry, id: `${Date.now()}_${Math.random()}` }];
       return next.slice(-10);
@@ -327,6 +392,7 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
         pendingAnswersRef.current[key] = trimmed;
       }
       await submitAnswer({ round: currentRound, answerText: trimmed });
+      persistBattleAnswer(sessionId, currentRound, { text: trimmed, isCorrect: null });
       setInputValue('');
       if (inputRef.current) {
         inputRef.current.value = '';

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import ResultCard from '../components/ResultCard';
 import LionComment from '../components/LionComment';
@@ -115,8 +115,33 @@ const selectBattlePlayerEntry = (roundDetail, playerId) => {
   return players[0];
 };
 
-const deriveBattleAnswerInfo = (roundDetail, playerId) => {
+const deriveBattleAnswerInfo = (
+  roundDetail,
+  playerId,
+  storedAnswers = {},
+  fallbackRoundNumber = null,
+) => {
   const playerEntry = selectBattlePlayerEntry(roundDetail, playerId) ?? {};
+  const candidateRound =
+    typeof roundDetail?.round === 'number' && roundDetail.round > 0
+      ? roundDetail.round
+      : fallbackRoundNumber;
+  const storedEntryRaw =
+    candidateRound !== null && candidateRound !== undefined
+      ? storedAnswers?.[candidateRound] ?? storedAnswers?.[String(candidateRound)] ?? null
+      : null;
+  const storedEntry =
+    storedEntryRaw && typeof storedEntryRaw === 'object'
+      ? storedEntryRaw
+      : typeof storedEntryRaw === 'string'
+        ? { text: storedEntryRaw, isCorrect: null }
+        : null;
+
+  const storedText =
+    storedEntry && typeof storedEntry.text === 'string' && storedEntry.text.trim().length > 0
+      ? storedEntry.text.trim()
+      : null;
+
   const text =
     pickFirstNonEmptyString(playerEntry, [
       'submittedText',
@@ -136,37 +161,42 @@ const deriveBattleAnswerInfo = (roundDetail, playerId) => {
     ]) ??
     pickStringFromArray(playerEntry?.answers) ??
     pickStringFromArray(roundDetail?.answers) ??
+    storedText ??
     DEFAULT_USER_INPUT;
 
+  let resolvedIsCorrect = null;
+
   if (typeof playerEntry?.isCorrect === 'boolean') {
-    return { text, isCorrect: playerEntry.isCorrect };
+    resolvedIsCorrect = playerEntry.isCorrect;
   }
 
   const normalizedPlayerResult = normalizeResultFlag(playerEntry?.result ?? playerEntry?.status);
   if (normalizedPlayerResult) {
     if (['correct', 'pass', 'success', 'right', 'win'].includes(normalizedPlayerResult)) {
-      return { text, isCorrect: true };
-    }
-    if (['wrong', 'fail', 'incorrect', 'lose'].includes(normalizedPlayerResult)) {
-      return { text, isCorrect: false };
+      resolvedIsCorrect = true;
+    } else if (['wrong', 'fail', 'incorrect', 'lose'].includes(normalizedPlayerResult)) {
+      resolvedIsCorrect = false;
     }
   }
 
   if (typeof roundDetail?.isCorrect === 'boolean') {
-    return { text, isCorrect: roundDetail.isCorrect };
+    resolvedIsCorrect = roundDetail.isCorrect;
   }
 
   const normalizedRoundResult = normalizeResultFlag(roundDetail?.result ?? roundDetail?.status);
   if (normalizedRoundResult) {
     if (['correct', 'pass', 'success', 'right', 'win'].includes(normalizedRoundResult)) {
-      return { text, isCorrect: true };
-    }
-    if (['wrong', 'fail', 'incorrect', 'lose'].includes(normalizedRoundResult)) {
-      return { text, isCorrect: false };
+      resolvedIsCorrect = true;
+    } else if (['wrong', 'fail', 'incorrect', 'lose'].includes(normalizedRoundResult)) {
+      resolvedIsCorrect = false;
     }
   }
 
-  return { text, isCorrect: false };
+  if (storedEntry && typeof storedEntry.isCorrect === 'boolean') {
+    resolvedIsCorrect = storedEntry.isCorrect;
+  }
+
+  return { text, isCorrect: resolvedIsCorrect };
 };
 
 const loadKakaoSDK = (appKey) => {
@@ -201,6 +231,38 @@ const Result = () => {
 
   const isPracticeMode = location.pathname.includes('/practice/');
   const currentId = isPracticeMode ? practiceId : sessionId;
+  const storedBattleAnswers = useMemo(() => {
+    if (isPracticeMode) return {};
+    if (!sessionId) return {};
+    if (typeof window === 'undefined') return {};
+    try {
+      const raw = sessionStorage.getItem(`battleAnswers:${sessionId}`);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        const normalized = {};
+        Object.keys(parsed).forEach((key) => {
+          const value = parsed[key];
+          if (value && typeof value === 'object') {
+            normalized[key] = {
+              ...(typeof value.text === 'string' ? { text: value.text } : {}),
+              ...(typeof value.isCorrect === 'boolean'
+                ? { isCorrect: value.isCorrect }
+                : value.isCorrect === null
+                  ? { isCorrect: null }
+                  : {}),
+            };
+          } else if (typeof value === 'string') {
+            normalized[key] = { text: value, isCorrect: null };
+          }
+        });
+        return normalized;
+      }
+    } catch (error) {
+      console.warn('[Result] battleAnswers 로드 실패', error);
+    }
+    return {};
+  }, [isPracticeMode, sessionId]);
 
   // 환경번수에서 앱키 불러오기
   const KAKAO_APP_KEY = (typeof process !== 'undefined' && process.env.REACT_APP_KAKAO_API_KEY)
@@ -243,6 +305,7 @@ const Result = () => {
 
       try {
         const response = await axios.get(API_URL, { headers });
+        console.log('[Result] battle/practice result response', response.data);
 
         if (isPracticeMode && response.data.questions) {
           const correctCount = response.data.questions.filter(q => q.result === 'correct').length;
@@ -325,7 +388,12 @@ const Result = () => {
 
   const { text: userInput, isCorrect } = isPracticeMode
     ? derivePracticeAnswerInfo(currentRoundDetail)
-    : deriveBattleAnswerInfo(currentRoundDetail, localPlayerId);
+    : deriveBattleAnswerInfo(
+      currentRoundDetail,
+      localPlayerId,
+      storedBattleAnswers,
+      currentRoundIndex + 1,
+    );
 
   const correctAnswer = resolveCorrectAnswer(currentRoundDetail);
   const standardRule = resolveExplanation(currentRoundDetail);
