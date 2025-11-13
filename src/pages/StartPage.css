@@ -1,0 +1,94 @@
+.start-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.start-page__container {
+  text-align: center;
+  padding: 2rem;
+}
+
+.start-page__title {
+  font-size: 3rem;
+  font-weight: bold;
+  color : black;
+  margin-bottom: 3rem;
+}
+
+.start-page__buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  max-width: 300px;
+  margin: 0 auto;
+}
+
+.start-page__button {
+  padding: 1.2rem 2.4rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.start-page__button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+.start-page__button:active {
+  transform: translateY(0);
+}
+
+.start-page__button--practice {
+  background: white;
+  color: #667eea;
+}
+
+.start-page__button--practice:hover {
+  background: #f5f5f5;
+}
+
+.start-page__button--battle {
+  background: #ff6b6b;
+  color: white;
+}
+
+.start-page__button--battle:hover {
+  background: #ff5252;
+}
+
+.start-page__button--battle:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+  transform: none;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  background: #ff8b8b;
+}
+
+.start-page__error {
+  margin-top: 1.5rem;
+  color: #ff4d4f;
+  font-size: 0.95rem;
+}
+
+@media (min-width: 768px) {
+  .start-page__buttons {
+    flex-direction: row;
+    max-width: 500px;
+  }
+
+  .start-page__button {
+    flex: 1;
+  }
+
+  .start-page__title {
+    font-size: 4rem;
+  }
+}
+
