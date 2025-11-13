@@ -168,9 +168,6 @@ function BattleDialog({ onClose, onStart, onCountdownComplete }) {
     if (isCountdownActive) {
       return `${countdown}`;
     }
-    if (isStarting) {
-      return '시작 준비 중...';
-    }
     return '시작하기';
   })();
 
@@ -226,7 +223,13 @@ function BattleDialog({ onClose, onStart, onCountdownComplete }) {
           </div>
 
           <button
-            className="battle-dialog__start-button"
+            className={`battle-dialog__start-button ${
+              isCountdownActive
+                ? 'battle-dialog__start-button--countdown'
+                : !buttonDisabled
+                  ? 'battle-dialog__start-button--active'
+                  : ''
+            }`}
             onClick={handleStart}
             disabled={buttonDisabled}
           >
