@@ -38,28 +38,12 @@ export function useBattleSocket({
   const typingCacheRef = useRef({});
 
   useEffect(() => {
-    console.log('[useBattleSocket] effect mount', { sessionId, roomCode, connectDelayMs });
-    if (!sessionId) {
-      console.debug('[useBattleSocket] sessionId 없음, 초기화만 수행');
-      return;
-    }
     const token = typeof window !== 'undefined' ? sessionStorage.getItem('guestToken') : null;
-    if (!token) {
-      console.warn('[useBattleSocket] guestToken 없음, 소켓 연결 건너뜀', { sessionId, roomCode });
-      return;
-    }
 
     let connectTimeoutId = null;
     let socketCleanup = null;
 
     const setupSocket = () => {
-      console.log('[useBattleSocket] connecting', {
-        sessionId,
-        roomCode,
-        token,
-        playerId: myPlayerIdRef.current,
-        connectDelayMs,
-      });
       const socket = connectBattleSocket(sessionId, token, myPlayerIdRef.current);
       socketRef.current = socket;
       let joinRetryTimeoutId = null;
@@ -75,10 +59,6 @@ export function useBattleSocket({
         if (ack?.ok) {
           const myId = ack?.you?.playerId ?? ack?.playerId ?? myPlayerIdRef.current;
           if (myId && myId !== myPlayerIdRef.current) {
-            console.log('[BattleSocket] battle:join ack playerId 갱신', {
-              old: myPlayerIdRef.current,
-              next: myId,
-            });
             myPlayerIdRef.current = myId;
             if (typeof window !== 'undefined') {
               sessionStorage.setItem('guestPlayerId', myId);
@@ -86,7 +66,6 @@ export function useBattleSocket({
           }
           return true;
         }
-        console.error('[BattleSocket] battle:join 실패', { ack, sessionId, roomCode });
         return false;
       };
 
@@ -95,62 +74,38 @@ export function useBattleSocket({
         clearJoinRetryTimeout();
         joinRetryTimeoutId = setTimeout(() => {
           if (!socket.connected) {
-            console.warn('[BattleSocket] battle:join 시도 전 소켓 연결이 끊김', { sessionId, roomCode, attemptIndex });
             return;
           }
-          console.log('[BattleSocket] battle:join 시도', {
-            payload,
-            attempt: attemptIndex + 1,
-            sessionId,
-            roomCode,
-          });
           socket.emit('battle:join', payload, (ack) => {
-            console.log('[BattleSocket] battle:join ack', {
-              ack,
-              sessionId,
-              roomCode,
-              attempt: attemptIndex + 1,
-            });
             if (processJoinAck(ack)) {
               clearJoinRetryTimeout();
               return;
             }
             if (attemptIndex + 1 < JOIN_MAX_ATTEMPTS) {
-              console.warn('[BattleSocket] battle:join 실패, 재시도 예정', {
-                attempt: attemptIndex + 1,
-                sessionId,
-                roomCode,
-              });
               scheduleJoinAttempt(attemptIndex + 1);
             } else {
-              console.error('[BattleSocket] battle:join 재시도 한도 초과', { sessionId, roomCode });
             }
           });
         }, attemptIndex === 0 ? joinInitialDelayMs : joinRetryDelayMs);
       };
 
       socket.on('connect', () => {
-        console.log('[BattleSocket] connected', { socketId: socket.id, sessionId, roomCode });
         setConnected(true);
         if (shouldJoin) {
           scheduleJoinAttempt(0);
         } else {
-          console.log('[BattleSocket] shouldJoin=false, battle:join 생략', { sessionId, roomCode });
         }
       });
 
       socket.on('connect_error', (err) => {
-        console.error('[BattleSocket] connect_error', err, { sessionId, roomCode });
       });
 
       socket.on('disconnect', (reason) => {
-        console.log('[BattleSocket] disconnected', { reason, sessionId, roomCode });
         clearJoinRetryTimeout();
         setConnected(false);
       });
 
       socket.on('battle:player_joined', (payload = {}) => {
-        console.log('[BattleSocket] battle:player_joined', { payload, sessionId, roomCode });
         const myId = myPlayerIdRef.current;
         if (payload.playerId && payload.playerId !== myId) {
           setRemoteJoined(true);
@@ -158,7 +113,6 @@ export function useBattleSocket({
       });
 
       socket.on('battle:snapshot', (payload = {}) => {
-        console.log('[BattleSocket] battle:snapshot', { payload, sessionId, roomCode });
         setQuestion(payload.question ?? null);
         if (payload.round) {
           setRoundInfo(payload.round);
@@ -172,7 +126,6 @@ export function useBattleSocket({
       });
 
       socket.on('battle:typing:update', (payload = {}) => {
-        console.log('[BattleSocket] battle:typing:update', { payload, sessionId, roomCode });
         setTypingSnapshot(payload);
         if (payload.playerId) {
           typingCacheRef.current[payload.playerId] = {
@@ -188,7 +141,6 @@ export function useBattleSocket({
       });
 
       socket.on('battle:round:next', (payload = {}) => {
-        console.log('[BattleSocket] battle:round:next', { payload, sessionId, roomCode });
         if (payload.round) {
           setRoundInfo(payload.round);
         }

@@ -4,6 +4,7 @@ import { getBattleSession } from '../services/battleApi';
 import winLion from '../assets/win_lion.svg';
 import cryLion from '../assets/cry_lion.svg';
 import timerIcon from '../assets/timer.svg';
+import audioIcon from '../assets/audio.svg';
 import './BattleRoomPage.css';
 
 function deriveAnswerEntry(source = {}) {
@@ -29,6 +30,7 @@ function deriveAnswerEntry(source = {}) {
 }
 
 const MAX_BADGES = 5;
+const ROUND_DURATION_SEC = 30;
 const DEFAULT_PLACEHOLDER = '(내용 없음)';
 
 function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
@@ -37,11 +39,14 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
   const [opponentAnswers, setOpponentAnswers] = useState([]);
   const [hasJoined, setHasJoined] = useState(false);
   const [badgeStates, setBadgeStates] = useState(Array(MAX_BADGES).fill('empty'));
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const pendingAnswersRef = useRef({});
   const latestTypingRef = useRef({});
   const inputRef = useRef(null);
   const isComposingRef = useRef(false);
   const previousRoundRef = useRef(null);
+  const lastSpokenKeyRef = useRef(null);
+  const [preloadedQuestions, setPreloadedQuestions] = useState([]);
 
   const connectDelayMs = role === 'host' ? 500 : 0;
   const joinInitialDelayMs = role === 'host' ? 1500 : 600;
@@ -61,30 +66,12 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
   const loadBadgeStates = useCallback(async () => {
     if (!sessionId || !playerId) return null;
     const response = await getBattleSession(sessionId);
-    console.log('[BattleRoomPage] 배지 summary 응답', {
-      sessionId,
-      playerId,
-      summary: response?.summary,
-    });
     const mySummary = Array.isArray(response?.summary)
       ? response.summary.find((entry) => entry?.playerId === playerId)
       : null;
-    if (!mySummary) {
-      console.warn('[BattleRoomPage] 내 요약 정보를 찾지 못했습니다.', {
-        playerId,
-        summary: response?.summary,
-      });
-      return null;
-    }
+    if (!mySummary) return null;
     const roundResults = Array.isArray(mySummary?.isCorrectByRound) ? mySummary.isCorrectByRound : null;
-    if (!roundResults) {
-      console.log('[BattleRoomPage] 배지 정보 응답에 isCorrectByRound 없음', {
-        sessionId,
-        playerId,
-        summary: response?.summary,
-      });
-      return null;
-    }
+    if (!roundResults) return null;
     const next = Array(MAX_BADGES).fill('empty');
     for (let i = 0; i < Math.min(roundResults.length, MAX_BADGES); i += 1) {
       if (roundResults[i] === true) {
@@ -96,11 +83,247 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
     return { next, roundResults };
   }, [sessionId, playerId]);
 
+  const speechSupported = useMemo(
+    () => typeof window !== 'undefined' && typeof window.speechSynthesis !== 'undefined',
+    [],
+  );
+  const voicesRef = useRef([]);
+  const speechUtteranceRef = useRef(null);
+  const [voicesReady, setVoicesReady] = useState(false);
+  const [speechError, setSpeechError] = useState(null);
+  const pendingSpeakRef = useRef(null);
+  useEffect(() => {
+    if (!sessionId) return;
+    try {
+      const stored = sessionStorage.getItem(`battleQuestions:${sessionId}`);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          setPreloadedQuestions(parsed);
+        }
+      }
+    } catch (error) {
+      console.warn('[BattleRoomPage] preloaded questions 로드 실패', error);
+    }
+  }, [sessionId]);
+
+  const fallbackQuestionEntry = useMemo(() => {
+    if (!Array.isArray(preloadedQuestions) || preloadedQuestions.length === 0) return null;
+    const index =
+      typeof roundInfo?.current === 'number' && roundInfo.current > 0
+        ? roundInfo.current - 1
+        : 0;
+    return preloadedQuestions[index] ?? null;
+  }, [preloadedQuestions, roundInfo?.current]);
+
+  const questionSpeechText = useMemo(() => {
+    const candidate =
+      question?.text ??
+      question?.sentence ??
+      question?.correctSentence ??
+      question?.question ??
+      question?.value ??
+      fallbackQuestionEntry?.text ??
+      fallbackQuestionEntry?.question ??
+      '';
+    return typeof candidate === 'string' ? candidate.trim() : '';
+  }, [question, fallbackQuestionEntry]);
+
+  const questionIdentifier =
+    question?.questionId ??
+    question?.id ??
+    fallbackQuestionEntry?.questionId ??
+    fallbackQuestionEntry?.id ??
+    null;
+  const questionKey = useMemo(() => {
+    if (!questionSpeechText) return null;
+    const baseId = questionIdentifier ?? `round-${roundInfo?.current ?? 'unknown'}`;
+    return `${baseId}::${questionSpeechText}`;
+  }, [questionIdentifier, questionSpeechText, roundInfo?.current]);
+
   const opponentTypingText = useMemo(() => {
     if (!typingSnapshot || typingSnapshot.playerId === playerId) return '';
     const raw = typingSnapshot.preview ?? typingSnapshot.text ?? typingSnapshot.answerText ?? '';
     return typeof raw === 'string' ? raw : '';
   }, [typingSnapshot, playerId]);
+
+  const timerFillWidth = useMemo(() => {
+    if (remainingSec === null || remainingSec === undefined) return '0%';
+    const ratio = Math.min(Math.max(remainingSec / ROUND_DURATION_SEC, 0), 1);
+    return `${ratio * 100}%`;
+  }, [remainingSec]);
+
+  const speakQuestion = useCallback(
+    (force = false) => {
+      console.log('[BattleRoomPage:TTS] speakQuestion 호출', {
+        force,
+        speechSupported,
+        questionKey,
+        questionSpeechText,
+        voicesReady,
+        voicesCount: voicesRef.current.length,
+      });
+      if (!speechSupported) {
+        setSpeechError(new Error('현재 브라우저에서 음성 합성을 사용할 수 없습니다.'));
+        return false;
+      }
+      if (!questionKey || !questionSpeechText) {
+        setSpeechError(new Error('읽을 문장이 없습니다.'));
+        return false;
+      }
+      if (!force && lastSpokenKeyRef.current === questionKey) {
+        return false;
+      }
+      try {
+        const synth = window.speechSynthesis;
+        const isBusy = synth.speaking || synth.pending;
+        if (isBusy) {
+          if (!force) {
+            console.log('[BattleRoomPage:TTS] 재생 중, 새 요청 무시', { questionKey });
+            return false;
+          }
+          pendingSpeakRef.current = {
+            key: questionKey,
+            text: questionSpeechText,
+            ts: Date.now(),
+          };
+          synth.cancel();
+          console.log('[BattleRoomPage:TTS] 기존 음성 재생 취소 (재시도 예정)', pendingSpeakRef.current);
+          return false;
+        }
+        const UtteranceCtor =
+          (typeof window !== 'undefined' && typeof window.SpeechSynthesisUtterance === 'function'
+            ? window.SpeechSynthesisUtterance
+            : undefined) ??
+          (typeof SpeechSynthesisUtterance !== 'undefined' ? SpeechSynthesisUtterance : undefined);
+        if (!UtteranceCtor) {
+          setSpeechError(new Error('음성 합성 객체를 생성할 수 없습니다.'));
+          console.error('[BattleRoomPage:TTS] SpeechSynthesisUtterance 생성 불가');
+          return false;
+        }
+        const utterance = new UtteranceCtor(questionSpeechText);
+        const hasKorean = /[가-힣]/.test(questionSpeechText);
+        const preferredVoice =
+          voicesRef.current.find((voice) =>
+            voice.lang?.toLowerCase().startsWith(hasKorean ? 'ko' : 'en'),
+          ) ??
+          voicesRef.current.find((voice) =>
+            voice.lang?.toLowerCase().includes(hasKorean ? 'ko' : 'en'),
+          ) ??
+          voicesRef.current[0] ??
+          null;
+        if (preferredVoice) {
+          utterance.voice = preferredVoice;
+          utterance.lang = preferredVoice.lang;
+        } else {
+          utterance.lang = hasKorean ? 'ko-KR' : 'en-US';
+        }
+        utterance.rate = 1;
+        utterance.pitch = 1;
+        utterance.volume = 1;
+        utterance.onstart = () => {
+          setIsSpeaking(true);
+          setSpeechError(null);
+          console.log('[BattleRoomPage:TTS] 음성 재생 시작', { questionKey });
+        };
+        utterance.onend = () => {
+          setIsSpeaking(false);
+          if (speechUtteranceRef.current === utterance) {
+            speechUtteranceRef.current = null;
+          }
+          console.log('[BattleRoomPage:TTS] 음성 재생 종료', { questionKey });
+          const pending = pendingSpeakRef.current;
+          if (pending && pending.key === questionKey) {
+            pendingSpeakRef.current = null;
+            console.log('[BattleRoomPage:TTS] 취소 후 재시도 실행', pending);
+            setTimeout(() => {
+              speakQuestion(true);
+            }, 100);
+          }
+        };
+        utterance.onerror = (event) => {
+          setIsSpeaking(false);
+          if (event?.error === 'canceled') {
+            console.warn('[BattleRoomPage:TTS] 음성 재생이 취소되었습니다.', { questionKey });
+            lastSpokenKeyRef.current = null;
+            const pending = pendingSpeakRef.current;
+            if (pending && pending.key === questionKey) {
+              pendingSpeakRef.current = null;
+              console.log('[BattleRoomPage:TTS] 취소 오류 후 재시도 실행', pending);
+              setTimeout(() => {
+                speakQuestion(true);
+              }, 120);
+            }
+          } else {
+            setSpeechError(new Error(event?.error || '음성 재생 중 오류가 발생했습니다.'));
+          }
+          if (speechUtteranceRef.current === utterance) {
+            speechUtteranceRef.current = null;
+          }
+          console.error('[BattleRoomPage:TTS] 음성 재생 오류', { questionKey, event });
+        };
+        speechUtteranceRef.current = utterance;
+        lastSpokenKeyRef.current = questionKey;
+        synth.resume();
+        synth.speak(utterance);
+        console.log('[BattleRoomPage:TTS] speechSynthesis.speak 호출 완료', { questionKey });
+        return true;
+      } catch (error) {
+        setIsSpeaking(false);
+        setSpeechError(error instanceof Error ? error : new Error('음성 합성 실패'));
+        console.error('[BattleRoomPage:TTS] 음성 합성 예외', error);
+        return false;
+      }
+    },
+    [speechSupported, questionKey, questionSpeechText, voicesReady],
+  );
+
+  useEffect(() => {
+    if (!speechSupported) return;
+    const synth = window.speechSynthesis;
+    const handleVoices = () => {
+      const voices = synth.getVoices() ?? [];
+      voicesRef.current = voices;
+      setVoicesReady(voices.length > 0);
+      console.log('[BattleRoomPage:TTS] voice 목록 로드', { count: voices.length });
+    };
+    handleVoices();
+    synth.addEventListener('voiceschanged', handleVoices);
+    return () => {
+      synth.removeEventListener('voiceschanged', handleVoices);
+    };
+  }, [speechSupported]);
+
+  useEffect(() => {
+    if (!speechSupported) return;
+    if (!questionKey || !questionSpeechText) {
+      setIsSpeaking(false);
+      lastSpokenKeyRef.current = null;
+      console.log('[BattleRoomPage:TTS] 자동 재생 취소 - 질문 없음', {
+        questionKey,
+        questionSpeechText,
+      });
+      return;
+    }
+    if (!voicesReady) {
+      console.log('[BattleRoomPage:TTS] 자동 재생 대기 - 음성 목록 준비 중');
+      return;
+    }
+    console.log('[BattleRoomPage:TTS] 자동 재생 시도', { questionKey });
+    speakQuestion(false);
+  }, [speechSupported, voicesReady, questionKey, questionSpeechText, speakQuestion]);
+
+  useEffect(() => {
+    return () => {
+      if (!speechSupported) return;
+      const synth = window.speechSynthesis;
+      if (synth.speaking) {
+        synth.cancel();
+      }
+      speechUtteranceRef.current = null;
+      lastSpokenKeyRef.current = null;
+    };
+  }, [speechSupported]);
 
   useEffect(() => {
     if (!typingSnapshot?.playerId) return;
@@ -108,47 +331,19 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
     latestTypingRef.current[typingSnapshot.playerId] = textValue;
   }, [typingSnapshot]);
 
-  useEffect(() => {
-    if (sessionId && roomCode) {
-      console.debug('[BattleRoomPage] mount', { sessionId, roomCode, role });
-    }
-  }, [sessionId, roomCode, role]);
-
-  useEffect(() => {
-    console.debug('[BattleRoomPage] roundInfo 업데이트', roundInfo);
-  }, [roundInfo]);
-
-  useEffect(() => {
-    if (!question) return;
-    console.debug('[BattleRoomPage] question 업데이트', question);
-  }, [question]);
-
-  useEffect(() => {
-    if (typeof remainingSec === 'number') {
-      console.debug('[BattleRoomPage] remainingSec 업데이트', remainingSec);
-    }
-  }, [remainingSec]);
 
   useEffect(() => {
     if (!answerJudged || !answerJudged.playerId) return;
-    console.debug('[BattleRoomPage] answerJudged 수신', answerJudged);
-    console.debug('[BattleRoomPage] 최신 typingSnapshot 기록', latestTypingRef.current);
-    console.debug('[BattleRoomPage] pendingAnswersRef', pendingAnswersRef.current);
     const entryKey = `${answerJudged.playerId}:${answerJudged.round ?? roundInfo?.current ?? 0}`;
     const entry = deriveAnswerEntry(answerJudged);
     if (!entry.text || entry.text === '(내용 없음)') {
       const pending = pendingAnswersRef.current[entryKey];
       if (pending && pending.trim().length > 0) {
         entry.text = pending;
-        console.debug('[BattleRoomPage] pendingAnswersRef 활용', { entryKey, text: entry.text });
       } else {
         const latestTyping = latestTypingRef.current[answerJudged.playerId];
         if (latestTyping && latestTyping.trim().length > 0) {
           entry.text = latestTyping;
-          console.debug('[BattleRoomPage] latestTyping 활용', {
-            playerId: answerJudged.playerId,
-            text: entry.text,
-          });
         }
         if (!entry.text || entry.text.trim().length === 0) {
           entry.text = DEFAULT_PLACEHOLDER;
@@ -191,25 +386,15 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
 
     let cancelled = false;
     (async () => {
-      console.log('[BattleRoomPage] 배지 정보 갱신 요청 시작', {
-        sessionId,
-        playerId,
-        reason,
-        previousRound,
-        currentRound,
-      });
       try {
         const result = await loadBadgeStates();
         if (!result) return;
         if (!cancelled) {
           const { next, roundResults } = result;
-          console.log('[BattleRoomPage] 배지 정보 갱신 완료', { next, roundResults, reason });
           setBadgeStates(next);
         }
       } catch (error) {
-        if (!cancelled) {
-          console.error('[BattleRoomPage] 배지 정보 갱신 실패', error);
-        }
+        if (!cancelled) void error;
       }
     })();
 
@@ -222,25 +407,16 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
     if (!sessionId || !playerId) return;
     if (!roundEndEvent || roundEndEvent.state !== 'ENDED') return;
     let cancelled = false;
-    console.log('[BattleRoomPage] 배지 정보 갱신 요청 시작', {
-      sessionId,
-      playerId,
-      reason: 'FINAL_ROUND_ENDED',
-      roundEndEvent,
-    });
     (async () => {
       try {
         const result = await loadBadgeStates();
         if (!result) return;
         if (!cancelled) {
           const { next, roundResults } = result;
-          console.log('[BattleRoomPage] 배지 정보 갱신 완료', { next, roundResults, reason: 'FINAL_ROUND_ENDED' });
           setBadgeStates(next);
         }
       } catch (error) {
-        if (!cancelled) {
-          console.error('[BattleRoomPage] 배지 정보 갱신 실패', error);
-        }
+        if (!cancelled) void error;
       }
     })();
     return () => {
@@ -250,7 +426,6 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
 
   useEffect(() => {
     if (question && !hasJoined) {
-      console.debug('[BattleRoomPage] first question 수신, 참가 완료 처리');
       setHasJoined(true);
     }
   }, [question, hasJoined]);
@@ -267,13 +442,9 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
 
   const currentRound = roundInfo?.current ?? 0;
   const totalRound = roundInfo?.total ?? 0;
-  const questionText =
-    question?.text ??
-    question?.sentence ??
-    question?.correctSentence ??
-    question?.question ??
-    question?.value ??
-    DEFAULT_PLACEHOLDER;
+  const questionAriaLabel = questionSpeechText
+    ? `질문 다시 듣기: ${questionSpeechText}`
+    : '질문 다시 듣기';
   const remainingSeconds = typeof remainingSec === 'number' && remainingSec >= 0 ? remainingSec : null;
   const myRoundWins = badgeStates.filter((state) => state === 'win').length;
   const opponentRoundWins = badgeStates.filter((state) => state === 'lose').length;
@@ -285,7 +456,6 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
       return;
     }
     if (!value) return;
-    console.debug('[BattleRoomPage] handleInputChange', { value, round: currentRound, playerId });
     sendTypingSnapshot({ round: currentRound, text: value });
   };
 
@@ -298,7 +468,6 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
     const value = event.target.value;
     setInputValue(value);
     if (!value) return;
-    console.debug('[BattleRoomPage] handleCompositionEnd', { value, round: currentRound, playerId });
     sendTypingSnapshot({ round: currentRound, text: value });
   };
 
@@ -308,29 +477,18 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
     const trimmed = rawValue.trim();
     if (!trimmed) return;
     try {
-      console.log('[BattleRoomPage] handleSubmit', {
-        rawValue,
-        trimmed,
-        round: currentRound,
-        playerId,
-      });
       if (playerId) {
         const key = `${playerId}:${currentRound}`;
         pendingAnswersRef.current[key] = trimmed;
-        console.debug('[BattleRoomPage] pendingAnswersRef 저장', { key, value: trimmed });
       }
       await submitAnswer({ round: currentRound, answerText: trimmed });
-      console.log('[BattleRoomPage] 소켓 정답 제출 성공', {
-        round: currentRound,
-        playerId,
-      });
       setInputValue('');
       if (inputRef.current) {
         inputRef.current.value = '';
       }
       sendTypingSnapshot({ round: currentRound, text: '' });
     } catch (error) {
-      console.error('[BattleRoomPage] submit 실패', error);
+      void error;
     }
   };
 
@@ -340,7 +498,6 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
         <header className="battle-room__header">
           <div className="battle-room__round">
             <strong>{currentRound || 1} ROUND</strong>
-            {totalRound ? <span className="battle-room__round-total"> / {totalRound}</span> : null}
           </div>
           <h1 className="battle-room__title">받아쓰기 배틀</h1>
           <div className="battle-room__badges" aria-label="승패 배지">
@@ -376,12 +533,29 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
             {remainingSeconds !== null ? `${remainingSeconds}초` : '대기 중'}
           </div>
           <div className="battle-room__timer-bar">
-            <div className="battle-room__timer-bar-fill" style={{ width: remainingSeconds ? `${Math.max(0, Math.min(remainingSeconds, 20)) * 5}%` : '0%' }} />
+            <div className="battle-room__timer-bar-fill" style={{ width: timerFillWidth }} />
           </div>
         </div>
 
         <section className="battle-room__question">
-          <p>{questionText}</p>
+          {speechSupported ? (
+            <button
+              type="button"
+              className={`battle-room__question-audio${
+                isSpeaking ? ' battle-room__question-audio--speaking' : ''
+              }`}
+              onClick={() => {
+                speakQuestion(true);
+              }}
+              aria-label={questionAriaLabel}
+            >
+              <img src={audioIcon} alt="" className="battle-room__question-audio-icon" aria-hidden />
+            </button>
+          ) : (
+            <span className="battle-room__question-audio-hint battle-room__question-audio-hint--error">
+              현재 브라우저에서는 음성 합성을 사용할 수 없습니다.
+            </span>
+          )}
         </section>
         <section className="battle-room__board-title-container">
           <div className="battle-room__board-title">
@@ -392,11 +566,6 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
           <div className="battle-room__board-title">
             <img src={winLion} alt="" className="battle-room__board-title-icon" aria-hidden />
             너
-            {opponentRoundWins > 0 && (
-              <span className="battle-room__win-count battle-room__win-count--opponent">
-                +{opponentRoundWins}
-              </span>
-            )}
           </div>
         </section>
         <section className="battle-room__board">

@@ -47,6 +47,16 @@ function StartPage({ onNavigateBattle }) {
       console.log('[StartPage] 배틀 시작 요청', { sessionId });
       const response = await startBattleRoom(sessionId, { countdownSec: 3 });
       console.log('[StartPage] 배틀 시작 API 성공', { sessionId, roomCode, response });
+      if (response?.questions && Array.isArray(response.questions)) {
+        try {
+          sessionStorage.setItem(
+            `battleQuestions:${sessionId}`,
+            JSON.stringify(response.questions),
+          );
+        } catch (storageError) {
+          console.warn('[StartPage] battleQuestions 저장 실패', storageError);
+        }
+      }
       return true;
     } catch (error) {
       console.log('[StartPage] 배틀 시작 API 실패', error);

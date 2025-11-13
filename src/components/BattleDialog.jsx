@@ -230,7 +230,7 @@ function BattleDialog({ onClose, onStart, onCountdownComplete }) {
               isCountdownActive
                 ? 'battle-dialog__start-button--countdown'
                 : canStart
-                  ? 'battle-dialog__start-button--active'
+                  ? 'battle-dialog__start-button--countdown'
                   : ''
             }`}
             onClick={handleStart}
@@ -238,9 +238,6 @@ function BattleDialog({ onClose, onStart, onCountdownComplete }) {
           >
             {buttonLabel}
           </button>
-          {isCountdownActive && (
-            <p className="battle-dialog__countdown-hint">곧 게임 화면으로 이동합니다...</p>
-          )}
         </div>
       </div>
     </div>
