@@ -107,6 +107,7 @@
 
 .battle-dialog__start-button:hover {
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  border-color: #F3F3F3;
 }
 
 .battle-dialog__start-button:disabled {
@@ -120,6 +121,7 @@
 
 .battle-dialog__start-button--active:hover {
   background: #FD7811;
+  border-color: #FD7811;
 }
 
 .battle-dialog__start-button--countdown {

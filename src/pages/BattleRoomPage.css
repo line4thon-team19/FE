@@ -249,8 +249,6 @@ background: #F3F3F3;
 }
 .battle-room__input:focus {
   outline: none;
-  border-color: #7c6dff;
-  box-shadow: 0 0 0 4px rgba(124, 109, 255, 0.18);
 }
 
 .battle-room__error {
