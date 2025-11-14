@@ -24,6 +24,12 @@ export async function createGuestPlayer() {
     sessionStorage.removeItem('guestToken');
     sessionStorage.removeItem('guestTokenExpiresAt');
     sessionStorage.removeItem('guestPlayerId');
+    try {
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('authTokenExpiresAt');
+    } catch (storageError) {
+      console.warn('[BattleAPI] localStorage authToken 초기화 실패', storageError);
+    }
   }
   const response = await request(API_ENDPOINTS.AUTH.GUEST, {
     method: 'POST',
@@ -36,6 +42,14 @@ export async function createGuestPlayer() {
     sessionStorage.setItem('guestToken', response.guestToken);
     sessionStorage.setItem('guestTokenExpiresAt', response.expiresAt ?? '');
     sessionStorage.setItem('guestPlayerId', response.playerId ?? '');
+    try {
+      localStorage.setItem('authToken', response.guestToken);
+      if (response?.expiresAt) {
+        localStorage.setItem('authTokenExpiresAt', response.expiresAt);
+      }
+    } catch (storageError) {
+      console.warn('[BattleAPI] localStorage authToken 저장 실패', storageError);
+    }
   }
   console.debug('[BattleAPI] 저장된 guestToken', sessionStorage.getItem('guestToken'));
 

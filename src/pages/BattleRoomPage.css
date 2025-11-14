@@ -1,5 +1,5 @@
 .battle-room {
-  height: 100vh;
+  width: 90%;
   background: #fff;
   display: flex;
   justify-content: center;
@@ -155,7 +155,7 @@
 border: 1px solid #000;
 background: #FFF;
   padding: 16px;
-  min-height: 240px;
+  min-height: 350px;
   display: flex;
   flex-direction: column;
   position: relative;
@@ -249,8 +249,7 @@ background: #F3F3F3;
 }
 .battle-room__input:focus {
   outline: none;
-  border-color: #7c6dff;
-  box-shadow: 0 0 0 4px rgba(124, 109, 255, 0.18);
+  border: 2px solid #eceef7;
 }
 
 .battle-room__error {

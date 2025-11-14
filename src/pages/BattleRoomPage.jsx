@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useBattleSocket } from '../hooks/useBattleSocket';
 import { useBattleTts } from '../hooks/useBattleTts';
 import { getBattleSession } from '../services/battleApi';
@@ -35,7 +36,56 @@ const ROUND_DURATION_SEC = 30;
 const DEFAULT_PLACEHOLDER = '(내용 없음)';
 const TTS_ENDPOINT = 'https://zyxjbccowxzomkmgqrie.supabase.co/functions/v1/tts';
 
+function persistBattleAnswer(sessionId, round, payload = {}) {
+  if (!sessionId || typeof round !== 'number' || Number.isNaN(round)) return;
+  const normalizedRound = Number.isFinite(round) ? Math.max(1, Math.floor(round)) : null;
+  if (!normalizedRound) return;
+  if (typeof window === 'undefined') return;
+  try {
+    const storageKey = `battleAnswers:${sessionId}`;
+    const raw = sessionStorage.getItem(storageKey);
+    const parsed = raw ? JSON.parse(raw) : {};
+    const key = String(normalizedRound);
+    const normalizedPayload =
+      typeof payload === 'object' && payload !== null
+        ? payload
+        : { text: typeof payload === 'string' ? payload : undefined };
+
+    const previousEntry = parsed[key];
+    const baseEntry =
+      previousEntry && typeof previousEntry === 'object'
+        ? previousEntry
+        : typeof previousEntry === 'string'
+          ? { text: previousEntry, isCorrect: null }
+          : {};
+
+    const nextEntry = { ...baseEntry };
+
+    if (typeof normalizedPayload.text === 'string') {
+      nextEntry.text = normalizedPayload.text;
+    }
+    if (typeof normalizedPayload.isCorrect === 'boolean') {
+      nextEntry.isCorrect = normalizedPayload.isCorrect;
+    } else if (
+      normalizedPayload.isCorrect === null &&
+      !Object.prototype.hasOwnProperty.call(nextEntry, 'isCorrect')
+    ) {
+      nextEntry.isCorrect = null;
+    }
+
+    if (Object.keys(nextEntry).length === 0) {
+      return;
+    }
+
+    parsed[key] = nextEntry;
+    sessionStorage.setItem(storageKey, JSON.stringify(parsed));
+  } catch (error) {
+    console.warn('[BattleRoomPage] battle answer 저장 실패', error);
+  }
+}
+
 function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
+  const navigate = useNavigate();
   const [inputValue, setInputValue] = useState('');
   const [myAnswers, setMyAnswers] = useState([]);
   const [opponentAnswers, setOpponentAnswers] = useState([]);
@@ -47,6 +97,7 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
   const isComposingRef = useRef(false);
   const previousRoundRef = useRef(null);
   const [preloadedQuestions, setPreloadedQuestions] = useState([]);
+  const hasNavigatedResultRef = useRef(false);
 
   const connectDelayMs = role === 'host' ? 500 : 0;
   const joinInitialDelayMs = role === 'host' ? 1500 : 600;
@@ -62,6 +113,16 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
     submitAnswer,
     playerId,
   } = useBattleSocket({ sessionId, roomCode, connectDelayMs, joinInitialDelayMs });
+  useEffect(() => {
+    if (hasNavigatedResultRef.current) return;
+    if (roundEndEvent?.state !== 'ENDED' || !sessionId) return;
+    hasNavigatedResultRef.current = true;
+    const timerId = setTimeout(() => {
+      navigate(`/result/battle/${sessionId}`);
+    }, 1500);
+    return () => clearTimeout(timerId);
+  }, [roundEndEvent, navigate, sessionId]);
+
 
   const loadBadgeStates = useCallback(async () => {
     if (!sessionId || !playerId) return null;
@@ -185,6 +246,23 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
     delete pendingAnswersRef.current[entryKey];
     const isMine = answerJudged.playerId === playerId;
     const targetSetter = isMine ? setMyAnswers : setOpponentAnswers;
+    const roundNumber =
+      typeof answerJudged.round === 'number'
+        ? answerJudged.round
+        : typeof roundInfo?.current === 'number'
+          ? roundInfo.current
+          : null;
+    if (
+      isMine &&
+      roundNumber !== null &&
+      entry.text &&
+      entry.text !== DEFAULT_PLACEHOLDER
+    ) {
+      persistBattleAnswer(sessionId, roundNumber, {
+        text: entry.text,
+        isCorrect: entry.isCorrect,
+      });
+    }
     targetSetter((prev) => {
       const next = [...prev, { ...entry, id: `${Date.now()}_${Math.random()}` }];
       return next.slice(-10);
@@ -193,24 +271,29 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
 
   useEffect(() => {
     if (!sessionId || !playerId) return;
-    const currentRound = typeof roundInfo?.current === 'number' ? roundInfo.current : null;
+    const currentRoundValue =
+      typeof roundInfo?.current === 'number' && !Number.isNaN(roundInfo.current)
+        ? roundInfo.current
+        : null;
     const previousRound =
       typeof previousRoundRef.current === 'number' ? previousRoundRef.current : null;
 
     let shouldFetch = false;
     let reason = null;
 
-    if (typeof currentRound === 'number' && currentRound > 0) {
+    if (typeof currentRoundValue === 'number' && currentRoundValue > 0) {
       if (previousRound === null || Number.isNaN(previousRound)) {
         shouldFetch = true;
         reason = 'INITIAL_LOAD';
-      } else if (typeof previousRound === 'number' && currentRound > previousRound) {
+      } else if (typeof previousRound === 'number' && currentRoundValue > previousRound) {
         shouldFetch = true;
-        reason = `ROUND_ADVANCED_${previousRound}_TO_${currentRound}`;
+        reason = `ROUND_ADVANCED_${previousRound}_TO_${currentRoundValue}`;
       }
     }
 
-    previousRoundRef.current = currentRound;
+    if (typeof currentRoundValue === 'number' && currentRoundValue > 0) {
+      previousRoundRef.current = currentRoundValue;
+    }
 
     if (!shouldFetch) {
       return;
@@ -272,6 +355,13 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
     );
   }
 
+  const currentRoundValue =
+    typeof roundInfo?.current === 'number' && roundInfo.current > 0 ? roundInfo.current : null;
+  const displayRoundNumber =
+    currentRoundValue ??
+    (typeof previousRoundRef.current === 'number' && previousRoundRef.current > 0
+      ? previousRoundRef.current
+      : 1);
   const currentRound = roundInfo?.current ?? 0;
   const totalRound = roundInfo?.total ?? 0;
   const questionAriaLabel = questionSpeechText
@@ -314,6 +404,7 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
         pendingAnswersRef.current[key] = trimmed;
       }
       await submitAnswer({ round: currentRound, answerText: trimmed });
+      persistBattleAnswer(sessionId, currentRound, { text: trimmed, isCorrect: null });
       setInputValue('');
       if (inputRef.current) {
         inputRef.current.value = '';
@@ -329,7 +420,7 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
       <div className="battle-room__container">
         <header className="battle-room__header">
           <div className="battle-room__round">
-            <strong>{currentRound || 1} ROUND</strong>
+            <strong>{displayRoundNumber} ROUND</strong>
           </div>
           <h1 className="battle-room__title">받아쓰기 배틀</h1>
           <div className="battle-room__badges" aria-label="승패 배지">
@@ -394,7 +485,6 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
           <div className="battle-room__board-title">
             <img src={winLion} alt="" className="battle-room__board-title-icon" aria-hidden />
             나
-            {myRoundWins > 0 && <span className="battle-room__win-count">+{myRoundWins}</span>}
           </div>
           <div className="battle-room__board-title">
             <img src={winLion} alt="" className="battle-room__board-title-icon" aria-hidden />
