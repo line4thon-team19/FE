@@ -271,24 +271,29 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
 
   useEffect(() => {
     if (!sessionId || !playerId) return;
-    const currentRound = typeof roundInfo?.current === 'number' ? roundInfo.current : null;
+    const currentRoundValue =
+      typeof roundInfo?.current === 'number' && !Number.isNaN(roundInfo.current)
+        ? roundInfo.current
+        : null;
     const previousRound =
       typeof previousRoundRef.current === 'number' ? previousRoundRef.current : null;
 
     let shouldFetch = false;
     let reason = null;
 
-    if (typeof currentRound === 'number' && currentRound > 0) {
+    if (typeof currentRoundValue === 'number' && currentRoundValue > 0) {
       if (previousRound === null || Number.isNaN(previousRound)) {
         shouldFetch = true;
         reason = 'INITIAL_LOAD';
-      } else if (typeof previousRound === 'number' && currentRound > previousRound) {
+      } else if (typeof previousRound === 'number' && currentRoundValue > previousRound) {
         shouldFetch = true;
-        reason = `ROUND_ADVANCED_${previousRound}_TO_${currentRound}`;
+        reason = `ROUND_ADVANCED_${previousRound}_TO_${currentRoundValue}`;
       }
     }
 
-    previousRoundRef.current = currentRound;
+    if (typeof currentRoundValue === 'number' && currentRoundValue > 0) {
+      previousRoundRef.current = currentRoundValue;
+    }
 
     if (!shouldFetch) {
       return;
@@ -350,6 +355,13 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
     );
   }
 
+  const currentRoundValue =
+    typeof roundInfo?.current === 'number' && roundInfo.current > 0 ? roundInfo.current : null;
+  const displayRoundNumber =
+    currentRoundValue ??
+    (typeof previousRoundRef.current === 'number' && previousRoundRef.current > 0
+      ? previousRoundRef.current
+      : 1);
   const currentRound = roundInfo?.current ?? 0;
   const totalRound = roundInfo?.total ?? 0;
   const questionAriaLabel = questionSpeechText
@@ -408,7 +420,7 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
       <div className="battle-room__container">
         <header className="battle-room__header">
           <div className="battle-room__round">
-            <strong>{currentRound || 1} ROUND</strong>
+            <strong>{displayRoundNumber} ROUND</strong>
           </div>
           <h1 className="battle-room__title">받아쓰기 배틀</h1>
           <div className="battle-room__badges" aria-label="승패 배지">
