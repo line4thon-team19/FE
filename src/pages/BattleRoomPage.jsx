@@ -101,6 +101,7 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
   const [preloadedQuestions, setPreloadedQuestions] = useState([]);
   const [apiQuestion, setApiQuestion] = useState(null);
   const hasNavigatedResultRef = useRef(false);
+  const opponentCorrectRoundsRef = useRef(new Set());
 
   const connectDelayMs = role === 'host' ? 500 : 0;
   const joinInitialDelayMs = role === 'host' ? 1500 : 600;
@@ -320,6 +321,12 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
         : typeof roundInfo?.current === 'number'
           ? roundInfo.current
           : null;
+    
+    // 상대방이 정답을 제출했는지 추적
+    if (!isMine && roundNumber !== null && entry.isCorrect === true) {
+      opponentCorrectRoundsRef.current.add(roundNumber);
+    }
+    
     if (
       isMine &&
       roundNumber !== null &&
@@ -335,7 +342,7 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
       const next = [...prev, { ...entry, id: `${Date.now()}_${Math.random()}` }];
       return next.slice(-10);
     });
-  }, [answerJudged, playerId]);
+  }, [answerJudged, playerId, sessionId]);
 
   useEffect(() => {
     if (!sessionId || !playerId) return;
@@ -412,6 +419,15 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
       setHasJoined(true);
     }
   }, [question, hasJoined]);
+
+  // 라운드가 바뀔 때 이전 라운드의 상대방 정답 추적 정보는 유지 (결과 화면에서 사용)
+  // 현재 라운드에서 상대방이 정답을 제출했는지 확인
+  const isOpponentCorrectInCurrentRound = useMemo(() => {
+    const currentRoundValue =
+      typeof roundInfo?.current === 'number' && roundInfo.current > 0 ? roundInfo.current : null;
+    if (!currentRoundValue) return false;
+    return opponentCorrectRoundsRef.current.has(currentRoundValue);
+  }, [roundInfo?.current]);
 
   if (!sessionId) {
     return (
@@ -492,6 +508,11 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    
+    // 상대방이 현재 라운드에서 정답을 제출했으면 제출 막기
+    if (isOpponentCorrectInCurrentRound) {
+      return;
+    }
     
     // 진행 중인 타이핑 스냅샷 타이머 취소
     if (typingSnapshotTimeoutRef.current) {
@@ -649,8 +670,9 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
             onChange={handleInputChange}
             onCompositionStart={handleCompositionStart}
             onCompositionEnd={handleCompositionEnd}
-            placeholder="정답을 입력해 주세요!"
+            placeholder={isOpponentCorrectInCurrentRound ? "상대방이 정답을 제출했습니다." : "정답을 입력해 주세요!"}
             className="battle-room__input"
+            disabled={isOpponentCorrectInCurrentRound}
             autoFocus
           />
         </form>
