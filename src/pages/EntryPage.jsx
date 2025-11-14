@@ -17,31 +17,25 @@ function EntryPage({ roomCode, sessionId, onBack, onReady }) {
 
   const resolvedRoomCode = useMemo(() => {
     if (roomCode && roomCode.trim().length > 0) {
-      const trimmed = roomCode.trim();
-      console.log('[EntryPage] roomCode prop 사용', trimmed);
-      return trimmed;
+      return roomCode.trim();
     }
     if (typeof window !== 'undefined') {
       const pathname = window.location.pathname;
       const match = pathname.match(/\/join\/([A-Za-z0-9]+)/);
       if (match && match[1]) {
-        console.log('[EntryPage] pathname에서 roomCode 파싱', { pathname, roomCode: match[1] });
         return match[1];
       }
       const params = new URLSearchParams(window.location.search);
       const fromQuery = params.get('roomCode');
       if (fromQuery) {
-        console.log('[EntryPage] searchParams에서 roomCode 파싱', { fromQuery });
         return fromQuery;
       }
     }
-    console.warn('[EntryPage] roomCode를 찾지 못했습니다.', { roomCode, sessionId });
     return null;
   }, [roomCode, sessionId]);
 
   useEffect(() => {
     if (!resolvedRoomCode) {
-      console.warn('[EntryPage] roomCode가 없습니다. 링크 파싱 대기', { roomCode, resolvedRoomCode });
       return;
     }
 
@@ -50,12 +44,9 @@ function EntryPage({ roomCode, sessionId, onBack, onReady }) {
     const ensureGuestToken = async () => {
       try {
         setIsLoading(true);
-        console.log('[EntryPage] 게스트 토큰 재발급 요청');
         await createGuestPlayer();
         setTokenReady(true);
-        console.log('[EntryPage] 게스트 토큰 준비 완료');
       } catch (err) {
-        console.error('게스트 토큰 발급 실패:', err);
         setError('게스트 토큰 발급에 실패했습니다.');
       } finally {
         setIsLoading(false);
@@ -75,9 +66,7 @@ function EntryPage({ roomCode, sessionId, onBack, onReady }) {
     const fetchEntry = async () => {
       try {
         setIsLoading(true);
-        console.log('[EntryPage] enterBattleRoom 요청 시작', { roomCode: resolvedRoomCode });
         const entry = await enterBattleRoom(resolvedRoomCode);
-        console.log('[EntryPage] enterBattleRoom 응답', entry);
         if (cancelled) return;
         setEntrySnapshot(entry);
         const entrySessionId =
@@ -90,10 +79,28 @@ function EntryPage({ roomCode, sessionId, onBack, onReady }) {
           throw new Error('세션 정보를 찾을 수 없습니다.');
         }
         setResolvedSessionId(entrySessionId);
+        
+        // 게스트 입장 시 questions가 있으면 sessionStorage에 저장 (TTS용)
+        // 여러 경로에서 questions 찾기
+        const questions =
+          entry?.questions ??
+          entry?.room?.questions ??
+          entry?.data?.questions ??
+          null;
+        if (entrySessionId && questions && Array.isArray(questions) && questions.length > 0) {
+          try {
+            sessionStorage.setItem(
+              `battleQuestions:${entrySessionId}`,
+              JSON.stringify(questions),
+            );
+          } catch (storageError) {
+            // battleQuestions 저장 실패
+          }
+        }
+        
         setError(null);
       } catch (err) {
         if (cancelled) return;
-        console.error('배틀룸 입장 실패:', err);
         setError(err.message || '배틀룸 입장에 실패했습니다.');
       } finally {
         if (!cancelled) {

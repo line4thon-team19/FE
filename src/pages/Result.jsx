@@ -209,13 +209,9 @@ const loadKakaoSDK = (appKey) => {
   if (window.Kakao) {
     try {
       window.Kakao.init(appKey);
-      console.log("카카오 SDK 초기화 완료:", window.Kakao.isInitialized());
     } catch (e) {
-      console.error("카카오 SDK 초기화 오류:", e);
+      // 카카오 SDK 초기화 오류
     }
-  } else {
-    // SDK가 아직 로드되지 않은 경우 (index.html 설정이 안 되었을 때를 대비)
-    console.warn("window.Kakao 객체를 찾을 수 없습니다. index.html의 스크립트 로드를 확인해주세요.");
   }
 };
 
@@ -305,7 +301,6 @@ const Result = () => {
 
       try {
         const response = await axios.get(API_URL, { headers });
-        console.log('[Result] battle/practice result response', response.data);
 
         if (isPracticeMode && response.data.questions) {
           const correctCount = response.data.questions.filter(q => q.result === 'correct').length;
@@ -315,7 +310,6 @@ const Result = () => {
         setGameResult(response.data);
         setLoading(false);
       } catch (err) {
-        console.error("API 호출 오류:", err);
 
         if (err.response) {
           if (err.response.status === 401 || err.response.status === 403) {
@@ -374,17 +368,100 @@ const Result = () => {
   }
 
 
-  const finalStatus = isPracticeMode ? 'practice' : (gameResult.result || 'practice');
-  const totalRounds = roundDetails.length;
-
-  const correctScore = isPracticeMode
-    ? (gameResult.calculatedScore !== undefined ? gameResult.calculatedScore : 0)
-    : (gameResult.summary && gameResult.summary.score !== undefined ? gameResult.summary.score : 0);
-
-  const currentRoundDetail = roundDetails[currentRoundIndex];
-
+  // 배틀 모드에서 로컬 저장 데이터로 승패 판정
   const localPlayerId =
     typeof window !== 'undefined' ? sessionStorage.getItem('guestPlayerId') ?? null : null;
+  
+  let finalStatus = 'practice';
+  let correctScore = 0;
+  
+  if (isPracticeMode) {
+    finalStatus = 'practice';
+    correctScore = gameResult.calculatedScore !== undefined ? gameResult.calculatedScore : 0;
+  } else {
+    // 로컬에 저장된 라운드별 정답 여부로 승패 계산
+    let myCorrectCount = 0;
+    let opponentCorrectCount = 0;
+    
+    // 내 정답 개수 계산 (로컬 저장 데이터에서)
+    Object.keys(storedBattleAnswers).forEach((roundKey) => {
+      const entry = storedBattleAnswers[roundKey];
+      if (entry && typeof entry.isCorrect === 'boolean' && entry.isCorrect === true) {
+        myCorrectCount++;
+      }
+    });
+    
+    // 내 playerId 찾기 (로컬 저장 또는 API 응답에서)
+    let myPlayerId = localPlayerId;
+    if (!myPlayerId && Array.isArray(roundDetails) && roundDetails.length > 0) {
+      // 첫 번째 라운드에서 내 플레이어 찾기 시도
+      const firstRound = roundDetails[0];
+      if (Array.isArray(firstRound?.players) && firstRound.players.length > 0) {
+        // 호스트인 경우 isHost로 찾기
+        const hostPlayer = firstRound.players.find((p) => p?.isHost === true);
+        if (hostPlayer) {
+          myPlayerId = hostPlayer.playerId ?? hostPlayer.id ?? hostPlayer.guestId ?? hostPlayer.userId ?? null;
+        } else {
+          // 호스트가 아니면 첫 번째 플레이어 사용
+          const firstPlayer = firstRound.players[0];
+          myPlayerId = firstPlayer?.playerId ?? firstPlayer?.id ?? firstPlayer?.guestId ?? firstPlayer?.userId ?? null;
+        }
+      }
+    }
+    
+    // 상대방 정답 개수 계산 (API 응답의 rounds에서)
+    if (Array.isArray(roundDetails)) {
+      roundDetails.forEach((roundDetail) => {
+        const roundNumber = typeof roundDetail?.round === 'number' ? roundDetail.round : null;
+        
+        // winner 필드로 승패 판정 (가장 정확)
+        if (roundDetail?.winner) {
+          const winnerId = 
+            typeof roundDetail.winner === 'string' 
+              ? roundDetail.winner 
+              : roundDetail.winner?.playerId ?? roundDetail.winner?.id ?? null;
+          
+          // winner가 나와 다르면 상대방이 이긴 것
+          if (winnerId && winnerId !== myPlayerId) {
+            opponentCorrectCount++;
+          }
+        } else if (Array.isArray(roundDetail?.players)) {
+          // players 배열에서 상대방 찾기
+          const opponentPlayer = roundDetail.players.find(
+            (player) => {
+              const playerId = player?.playerId ?? player?.id ?? player?.guestId ?? player?.userId ?? null;
+              return playerId && playerId !== myPlayerId;
+            },
+          );
+          if (opponentPlayer) {
+            const isOpponentCorrect =
+              typeof opponentPlayer.isCorrect === 'boolean'
+                ? opponentPlayer.isCorrect
+                : normalizeResultFlag(opponentPlayer?.result ?? opponentPlayer?.status) === 'correct' ||
+                  normalizeResultFlag(opponentPlayer?.result ?? opponentPlayer?.status) === 'win';
+            if (isOpponentCorrect) {
+              opponentCorrectCount++;
+            }
+          }
+        }
+      });
+    }
+    
+    correctScore = myCorrectCount;
+    
+    // 승패 판정
+    if (myCorrectCount > opponentCorrectCount) {
+      finalStatus = 'win';
+    } else if (myCorrectCount < opponentCorrectCount) {
+      finalStatus = 'lose';
+    } else {
+      finalStatus = 'tie';
+    }
+  }
+  
+  const totalRounds = roundDetails.length;
+
+  const currentRoundDetail = roundDetails[currentRoundIndex];
 
   const { text: userInput, isCorrect } = isPracticeMode
     ? derivePracticeAnswerInfo(currentRoundDetail)
@@ -456,7 +533,6 @@ const Result = () => {
   // 카카오톡 공유 로직
   const handleShareResult = () => {
     if (isPracticeMode) {
-      console.log("연습 모드에서는 공유 기능을 사용할 수 없습니다.");
       return;
     }
 

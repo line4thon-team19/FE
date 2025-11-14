@@ -34,7 +34,8 @@ export function useBattleTts({
     setIsLoading(true);
     setError(null);
 
-    const fetchTts = async () => {
+    const fetchTts = async (retryCount = 0) => {
+      const maxRetries = 2;
       try {
         const response = await fetch(endpoint, {
           method: 'POST',
@@ -43,7 +44,8 @@ export function useBattleTts({
           signal: controller.signal,
         });
         if (!response.ok) {
-          throw new Error('TTS 생성 요청이 실패했습니다.');
+          const errorText = await response.text().catch(() => '');
+          throw new Error(`TTS 생성 요청이 실패했습니다. (${response.status}${errorText ? `: ${errorText}` : ''})`);
         }
         const data = await response.json();
         if (!data?.audio) {
@@ -59,15 +61,40 @@ export function useBattleTts({
         });
       } catch (fetchError) {
         if (!isActive || fetchError.name === 'AbortError') return;
+        
+        // 네트워크 오류나 5xx 에러인 경우 재시도
+        const shouldRetry = retryCount < maxRetries && (
+          (fetchError instanceof TypeError && fetchError.message.includes('fetch')) ||
+          (fetchError instanceof Error && fetchError.message.includes('500')) ||
+          (fetchError instanceof Error && fetchError.message.includes('502')) ||
+          (fetchError instanceof Error && fetchError.message.includes('503')) ||
+          (fetchError instanceof Error && fetchError.message.includes('504'))
+        );
+        
+        if (shouldRetry) {
+          setTimeout(() => {
+            if (isActive && !controller.signal.aborted) {
+              fetchTts(retryCount + 1);
+            }
+          }, 1000 * (retryCount + 1));
+          return;
+        }
+        
         setAudioUrl((prev) => {
           if (prev) URL.revokeObjectURL(prev);
           return null;
         });
-        setError(
-          fetchError instanceof Error ? fetchError : new Error('TTS 변환 중 오류가 발생했습니다.'),
-        );
+        let errorMessage = 'TTS 변환 중 오류가 발생했습니다.';
+        if (fetchError instanceof Error) {
+          if (fetchError.name === 'TypeError' && fetchError.message.includes('fetch')) {
+            errorMessage = '네트워크 오류가 발생했습니다. 인터넷 연결을 확인해주세요.';
+          } else {
+            errorMessage = fetchError.message;
+          }
+        }
+        setError(new Error(errorMessage));
       } finally {
-        if (isActive) {
+        if (isActive && !controller.signal.aborted) {
           setIsLoading(false);
         }
       }

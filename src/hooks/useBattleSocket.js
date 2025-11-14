@@ -113,7 +113,12 @@ export function useBattleSocket({
       });
 
       socket.on('battle:snapshot', (payload = {}) => {
-        setQuestion(payload.question ?? null);
+        const snapshotQuestion =
+          payload.question ??
+          payload.currentQuestion ??
+          payload.current?.question ??
+          null;
+        setQuestion(snapshotQuestion);
         if (payload.round) {
           setRoundInfo(payload.round);
         }
@@ -122,6 +127,17 @@ export function useBattleSocket({
         }
         if (payload.summary) {
           setSummary(payload.summary);
+        }
+        // snapshot에 questions 배열이 있으면 저장
+        if (payload.questions && Array.isArray(payload.questions) && typeof window !== 'undefined') {
+          try {
+            sessionStorage.setItem(
+              `battleQuestions:${sessionId}`,
+              JSON.stringify(payload.questions),
+            );
+          } catch (storageError) {
+            // snapshot questions 저장 실패
+          }
         }
       });
 
@@ -160,7 +176,6 @@ export function useBattleSocket({
       });
 
       socket.on('battle:round:end', (payload = {}) => {
-        console.log('[BattleSocket] battle:round:end', { payload, sessionId, roomCode });
         setRemainingSec(0);
         if (payload.round) {
           setRoundInfo(payload.round);
@@ -177,7 +192,6 @@ export function useBattleSocket({
       });
 
       socket.on('battle:answer:result', (payload = {}) => {
-        console.log('[BattleSocket] battle:answer:result', { payload, sessionId, roomCode });
       if (payload?.playerId) {
         const cacheEntry = typingCacheRef.current[payload.playerId];
         if (cacheEntry) {
@@ -199,11 +213,10 @@ export function useBattleSocket({
       });
 
       socket.on('error', (err) => {
-        console.error('[BattleSocket] error', err, { sessionId, roomCode });
+        // 소켓 에러
       });
 
       socketCleanup = () => {
-        console.log('[useBattleSocket] cleanup socket', { sessionId, roomCode });
         clearJoinRetryTimeout();
         socket.removeAllListeners();
         socket.disconnect();

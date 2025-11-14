@@ -80,7 +80,7 @@ function persistBattleAnswer(sessionId, round, payload = {}) {
     parsed[key] = nextEntry;
     sessionStorage.setItem(storageKey, JSON.stringify(parsed));
   } catch (error) {
-    console.warn('[BattleRoomPage] battle answer 저장 실패', error);
+    // battle answer 저장 실패
   }
 }
 
@@ -96,7 +96,10 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
   const inputRef = useRef(null);
   const isComposingRef = useRef(false);
   const previousRoundRef = useRef(null);
+  const typingSnapshotTimeoutRef = useRef(null);
+  const lastTypingValueRef = useRef('');
   const [preloadedQuestions, setPreloadedQuestions] = useState([]);
+  const [apiQuestion, setApiQuestion] = useState(null);
   const hasNavigatedResultRef = useRef(false);
 
   const connectDelayMs = role === 'host' ? 500 : 0;
@@ -153,11 +156,70 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
         if (Array.isArray(parsed)) {
           setPreloadedQuestions(parsed);
         }
+      } else {
+        // sessionStorage에 없으면 API에서 가져오기 시도
+        getBattleSession(sessionId)
+          .then((response) => {
+            // 여러 가능한 경로에서 questions 찾기
+            const questions =
+              response?.questions ??
+              response?.room?.questions ??
+              response?.data?.questions ??
+              null;
+            if (questions && Array.isArray(questions) && questions.length > 0) {
+              try {
+                sessionStorage.setItem(
+                  `battleQuestions:${sessionId}`,
+                  JSON.stringify(questions),
+                );
+                setPreloadedQuestions(questions);
+              } catch (storageError) {
+                // questions 저장 실패
+              }
+            }
+          })
+          .catch((error) => {
+            // API에서 questions 가져오기 실패
+          });
       }
     } catch (error) {
-      console.warn('[BattleRoomPage] preloaded questions 로드 실패', error);
+      // preloaded questions 로드 실패
     }
   }, [sessionId]);
+
+  // 라운드가 바뀔 때마다 현재 라운드 question 업데이트
+  useEffect(() => {
+    if (!sessionId) return;
+    const currentRound = roundInfo?.current;
+    if (!currentRound || currentRound <= 0) return;
+    
+    // preloadedQuestions가 있으면 사용
+    if (preloadedQuestions.length > 0) {
+      const currentIndex = currentRound - 1;
+      const currentQuestion = preloadedQuestions[currentIndex];
+      if (currentQuestion) {
+        setApiQuestion(currentQuestion);
+        return;
+      }
+    }
+
+    // preloadedQuestions가 없으면 API에서 현재 라운드 question 가져오기
+    let cancelled = false;
+    getBattleSession(sessionId)
+      .then((response) => {
+        if (cancelled) return;
+        if (response?.question) {
+          setApiQuestion(response.question);
+        }
+      })
+      .catch((error) => {
+        // 현재 라운드 question 가져오기 실패
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId, roundInfo?.current, preloadedQuestions]);
 
   const fallbackQuestionEntry = useMemo(() => {
     if (!Array.isArray(preloadedQuestions) || preloadedQuestions.length === 0) return null;
@@ -169,17 +231,23 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
   }, [preloadedQuestions, roundInfo?.current]);
 
   const questionSpeechText = useMemo(() => {
+    // 우선순위: 소켓 question > API question > fallbackQuestionEntry
     const candidate =
       question?.text ??
       question?.sentence ??
       question?.correctSentence ??
       question?.question ??
       question?.value ??
+      apiQuestion?.text ??
+      apiQuestion?.sentence ??
+      apiQuestion?.correctSentence ??
+      apiQuestion?.question ??
+      apiQuestion?.value ??
       fallbackQuestionEntry?.text ??
       fallbackQuestionEntry?.question ??
       '';
     return typeof candidate === 'string' ? candidate.trim() : '';
-  }, [question, fallbackQuestionEntry]);
+  }, [question, apiQuestion, fallbackQuestionEntry, roundInfo?.current, preloadedQuestions.length]);
 
   const questionIdentifier =
     question?.questionId ??
@@ -374,31 +442,86 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
   const handleInputChange = (event) => {
     const value = event.target.value;
     setInputValue(value);
-    if (isComposingRef.current) {
-      return;
+    lastTypingValueRef.current = value;
+    
+    // 이전 타이핑 스냅샷 타이머 취소
+    if (typingSnapshotTimeoutRef.current) {
+      clearTimeout(typingSnapshotTimeoutRef.current);
+      typingSnapshotTimeoutRef.current = null;
     }
-    if (!value) return;
-    sendTypingSnapshot({ round: currentRound, text: value });
+    
+    // composition 중이 아니면 debounce로 스냅샷 전송
+    if (!isComposingRef.current) {
+      // 짧은 debounce로 빠른 타이핑에도 대응
+      typingSnapshotTimeoutRef.current = setTimeout(() => {
+        const latestValue = inputRef.current ? inputRef.current.value : lastTypingValueRef.current;
+        if (latestValue) {
+          sendTypingSnapshot({ round: currentRound, text: latestValue });
+        }
+        typingSnapshotTimeoutRef.current = null;
+      }, 50);
+    }
   };
 
   const handleCompositionStart = () => {
     isComposingRef.current = true;
+    // composition 시작 시 이전 타이머 취소
+    if (typingSnapshotTimeoutRef.current) {
+      clearTimeout(typingSnapshotTimeoutRef.current);
+      typingSnapshotTimeoutRef.current = null;
+    }
   };
 
   const handleCompositionEnd = (event) => {
     isComposingRef.current = false;
     const value = event.target.value;
     setInputValue(value);
-    if (!value) return;
-    sendTypingSnapshot({ round: currentRound, text: value });
+    lastTypingValueRef.current = value;
+    
+    // composition이 끝나면 즉시 최신 값을 스냅샷으로 전송
+    // 이전 타이머가 있으면 취소하고 최신 값으로 전송
+    if (typingSnapshotTimeoutRef.current) {
+      clearTimeout(typingSnapshotTimeoutRef.current);
+      typingSnapshotTimeoutRef.current = null;
+    }
+    
+    if (value) {
+      sendTypingSnapshot({ round: currentRound, text: value });
+    }
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    const rawValue = inputRef.current ? inputRef.current.value : inputValue;
+    
+    // 진행 중인 타이핑 스냅샷 타이머 취소
+    if (typingSnapshotTimeoutRef.current) {
+      clearTimeout(typingSnapshotTimeoutRef.current);
+      typingSnapshotTimeoutRef.current = null;
+    }
+    
+    // composition이 진행 중이면 잠시 대기 후 최신 값 가져오기
+    if (isComposingRef.current) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    
+    // 최신 값을 확실히 가져오기: inputRef의 실제 값과 state 값, lastTypingValueRef 중 최신 것 사용
+    const refValue = inputRef.current ? inputRef.current.value : '';
+    const stateValue = inputValue;
+    const cachedValue = lastTypingValueRef.current;
+    
+    // 세 값 중 가장 긴 것을 사용 (더 최신일 가능성이 높음)
+    const rawValue = [refValue, stateValue, cachedValue]
+      .filter((v) => typeof v === 'string')
+      .reduce((a, b) => (a.length >= b.length ? a : b), '');
+    
     const trimmed = rawValue.trim();
+    
     if (!trimmed) return;
+    
     try {
+      // 제출 전에 최신 값을 한 번 더 스냅샷으로 전송 (마지막 글자 확실히 전송)
+      sendTypingSnapshot({ round: currentRound, text: trimmed });
+      
       if (playerId) {
         const key = `${playerId}:${currentRound}`;
         pendingAnswersRef.current[key] = trimmed;
@@ -406,6 +529,7 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
       await submitAnswer({ round: currentRound, answerText: trimmed });
       persistBattleAnswer(sessionId, currentRound, { text: trimmed, isCorrect: null });
       setInputValue('');
+      lastTypingValueRef.current = '';
       if (inputRef.current) {
         inputRef.current.value = '';
       }
