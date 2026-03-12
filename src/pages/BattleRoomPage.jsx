@@ -34,7 +34,7 @@ function deriveAnswerEntry(source = {}) {
 const MAX_BADGES = 5;
 const ROUND_DURATION_SEC = 30;
 const DEFAULT_PLACEHOLDER = '(내용 없음)';
-const TTS_ENDPOINT = 'https://zyxjbccowxzomkmgqrie.supabase.co/functions/v1/tts';
+const TTS_ENDPOINT = 'https://amksldrggfywuzaygpgf.supabase.co/functions/v1/tts';
 
 function persistBattleAnswer(sessionId, round, payload = {}) {
   if (!sessionId || typeof round !== 'number' || Number.isNaN(round)) return;
