@@ -36,6 +36,48 @@ const ROUND_DURATION_SEC = 30;
 const DEFAULT_PLACEHOLDER = '(내용 없음)';
 const TTS_ENDPOINT = 'https://zyxjbccowxzomkmgqrie.supabase.co/functions/v1/tts';
 
+function deriveBadgeStatesFromRoundResults(roundResults, visibleRoundCount = MAX_BADGES) {
+  if (!Array.isArray(roundResults)) return null;
+  const next = Array(MAX_BADGES).fill('empty');
+  const maxVisible = Math.max(0, Math.min(visibleRoundCount, MAX_BADGES));
+  for (let i = 0; i < Math.min(roundResults.length, maxVisible); i += 1) {
+    if (roundResults[i] === true) {
+      next[i] = 'win';
+    } else if (roundResults[i] === false) {
+      next[i] = 'lose';
+    }
+  }
+  return { next, roundResults };
+}
+
+function findMySummaryEntry(summary, playerId, role = 'guest') {
+  if (!Array.isArray(summary) || summary.length === 0) return null;
+  const byPlayerId = playerId
+    ? summary.find((entry) => entry?.playerId === playerId)
+    : null;
+  if (byPlayerId) return byPlayerId;
+  const byRole = summary.find((entry) => Boolean(entry?.isHost) === (role === 'host'));
+  return byRole ?? null;
+}
+
+function deriveBadgeStatesFromSummary(summary, playerId, role = 'guest', visibleRoundCount = MAX_BADGES) {
+  const mySummary = findMySummaryEntry(summary, playerId, role);
+  if (!mySummary) return null;
+  return deriveBadgeStatesFromRoundResults(mySummary?.isCorrectByRound, visibleRoundCount);
+}
+
+function finalizeVisibleBadgeStates(serverStates = [], localRoundResults = {}, visibleRoundCount = 0) {
+  const next = Array(MAX_BADGES).fill('empty');
+  const maxVisible = Math.max(0, Math.min(visibleRoundCount, MAX_BADGES));
+  for (let i = 0; i < maxVisible; i += 1) {
+    const roundKey = String(i + 1);
+    const localState = localRoundResults?.[roundKey] ?? null;
+    const serverState = serverStates?.[i] ?? 'empty';
+    next[i] = localState ?? (serverState !== 'empty' ? serverState : 'lose');
+  }
+  return next;
+}
+
 function persistBattleAnswer(sessionId, round, payload = {}) {
   if (!sessionId || typeof round !== 'number' || Number.isNaN(round)) return;
   const normalizedRound = Number.isFinite(round) ? Math.max(1, Math.floor(round)) : null;
@@ -101,6 +143,7 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
   const [preloadedQuestions, setPreloadedQuestions] = useState([]);
   const [apiQuestion, setApiQuestion] = useState(null);
   const hasNavigatedResultRef = useRef(false);
+  const resolvedRoundResultsRef = useRef({});
   const opponentCorrectRoundsRef = useRef(new Set());
 
   const connectDelayMs = role === 'host' ? 500 : 0;
@@ -128,25 +171,11 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
   }, [roundEndEvent, navigate, sessionId]);
 
 
-  const loadBadgeStates = useCallback(async () => {
+  const loadBadgeStates = useCallback(async (visibleRoundCount = MAX_BADGES) => {
     if (!sessionId || !playerId) return null;
     const response = await getBattleSession(sessionId);
-    const mySummary = Array.isArray(response?.summary)
-      ? response.summary.find((entry) => entry?.playerId === playerId)
-      : null;
-    if (!mySummary) return null;
-    const roundResults = Array.isArray(mySummary?.isCorrectByRound) ? mySummary.isCorrectByRound : null;
-    if (!roundResults) return null;
-    const next = Array(MAX_BADGES).fill('empty');
-    for (let i = 0; i < Math.min(roundResults.length, MAX_BADGES); i += 1) {
-      if (roundResults[i] === true) {
-        next[i] = 'win';
-      } else if (roundResults[i] === false) {
-        next[i] = 'lose';
-      }
-    }
-    return { next, roundResults };
-  }, [sessionId, playerId]);
+    return deriveBadgeStatesFromSummary(response?.summary, playerId, role, visibleRoundCount);
+  }, [sessionId, playerId, role]);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -325,6 +354,7 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
     // 상대방이 정답을 제출했는지 추적
     if (!isMine && roundNumber !== null && entry.isCorrect === true) {
       opponentCorrectRoundsRef.current.add(roundNumber);
+      resolvedRoundResultsRef.current[String(roundNumber)] = 'lose';
     }
     
     if (
@@ -337,6 +367,9 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
         text: entry.text,
         isCorrect: entry.isCorrect,
       });
+      if (entry.isCorrect === true) {
+        resolvedRoundResultsRef.current[String(roundNumber)] = 'win';
+      }
     }
     targetSetter((prev) => {
       const next = [...prev, { ...entry, id: `${Date.now()}_${Math.random()}` }];
@@ -374,17 +407,32 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
       return;
     }
 
+    const visibleRoundCount = Math.max(0, currentRoundValue - 1);
     let cancelled = false;
     (async () => {
       try {
-        const result = await loadBadgeStates();
-        if (!result) return;
+        const result = await loadBadgeStates(visibleRoundCount);
+        const serverStates = result?.next ?? Array(MAX_BADGES).fill('empty');
         if (!cancelled) {
-          const { next, roundResults } = result;
-          setBadgeStates(next);
+          setBadgeStates(
+            finalizeVisibleBadgeStates(
+              serverStates,
+              resolvedRoundResultsRef.current,
+              visibleRoundCount,
+            ),
+          );
         }
       } catch (error) {
-        if (!cancelled) void error;
+        if (!cancelled) {
+          setBadgeStates(
+            finalizeVisibleBadgeStates(
+              Array(MAX_BADGES).fill('empty'),
+              resolvedRoundResultsRef.current,
+              visibleRoundCount,
+            ),
+          );
+          void error;
+        }
       }
     })();
 
@@ -392,27 +440,6 @@ function BattleRoomPage({ sessionId, roomCode, role = 'guest' }) {
       cancelled = true;
     };
   }, [sessionId, playerId, roundInfo?.current, loadBadgeStates]);
-
-  useEffect(() => {
-    if (!sessionId || !playerId) return;
-    if (!roundEndEvent || roundEndEvent.state !== 'ENDED') return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const result = await loadBadgeStates();
-        if (!result) return;
-        if (!cancelled) {
-          const { next, roundResults } = result;
-          setBadgeStates(next);
-        }
-      } catch (error) {
-        if (!cancelled) void error;
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [sessionId, playerId, roundEndEvent, loadBadgeStates]);
 
   useEffect(() => {
     if (question && !hasJoined) {
